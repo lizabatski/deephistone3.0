@@ -14,10 +14,10 @@ echo "=== E003 Parallel Processing ==="
 echo "Job ID: $SLURM_JOB_ID, Array Task: $SLURM_ARRAY_TASK_ID"
 echo "Node: $(hostname), Start: $(date)"
 
-# Load modules
+# load modules
 module load python/3.9 scipy-stack
 
-# Your 5 markers
+# 5 markers -- note for now only 5 markers because I was doing sequential and those already fufilled
 MARKERS=("H3K36me3" "H3K27me3" "H3K9me3" "H3K27ac" "H3K9ac")
 MARKER=${MARKERS[$SLURM_ARRAY_TASK_ID-1]}
 

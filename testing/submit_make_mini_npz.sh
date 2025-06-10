@@ -1,8 +1,9 @@
 #!/bin/bash
 #SBATCH --job-name=mini_npz
+#SBATCH --account=def-majewski
 #SBATCH --time=00:10:00
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=8G
+#SBATCH --mem=32G
 #SBATCH --output=mini_npz.out
 #SBATCH --error=mini_npz.err
 

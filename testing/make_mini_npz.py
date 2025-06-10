@@ -1,7 +1,7 @@
 import numpy as np
 
 print("Loading full .npz file (this may take a bit)...")
-with np.load("data/converted/E003_all_markers_merged.npz", mmap_mode=None) as f:
+with np.load("../data/converted/E003_all_markers_merged.npz", mmap_mode=None) as f:
     keys = f['keys'][:100]
     dna = f['dna'][:100]
     dnase = f['dnase'][:100]

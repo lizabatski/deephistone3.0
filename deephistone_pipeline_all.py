@@ -83,10 +83,10 @@ class DeepHistoneConfig:
                     if len(parts) >= 2:
                         chrom, size = parts[0], int(parts[1])
                         
-                        if chrom in ['chrX', 'chrY']: #made the decision to not include sex chromosomes
+                        if chrom in ['chrX', 'chrY']: #made the decision to not include sex chromosomes -- maybe add this back later
                             continue
                         # test mode
-                        if self.TEST_MODE and chrom != self.TEST_CHROMOSOME:
+                        if self.TEST_MODE and chrom != self.TEST_CHROMOSOME: #currently test chromosome is chr 22 
                             continue
                         chrom_sizes[chrom] = size
         except FileNotFoundError:
@@ -97,6 +97,7 @@ class DeepHistoneConfig:
         
         return chrom_sizes
     
+    #reproducible path methods 
     def get_chipseq_path(self, epigenome_id, marker):
         return f"{self.BASE_PATH}/{epigenome_id}-{marker}.narrowPeak"
     
@@ -158,9 +159,9 @@ def load_all_peaks_at_once(epigenome_id):
     #trying to optimize cuz yesterday was a fail
     start_time = log_progress(f"Loading all peaks for {epigenome_id}...")
     
-    all_peaks = {marker: defaultdict(list) for marker in config.ALL_MARKERS}
+    all_peaks = {marker: defaultdict(list) for marker in config.ALL_MARKERS} #there will be a dictionary where the keys are the markers and the values are dictionaries of chromosomes with lists of peaks
     
-    for marker in config.ALL_MARKERS:
+    for marker in config.ALL_MARKERS: #going through all markers
         peaks_file = config.get_chipseq_path(epigenome_id, marker)
         if os.path.exists(peaks_file):
             with open(peaks_file, 'r') as f:
@@ -174,8 +175,10 @@ def load_all_peaks_at_once(epigenome_id):
                         continue
                         
                     try:
+                        # col[0] is chromosome name col[1] is start position, col[2] is end position
                         chrom, start, end = cols[0], int(cols[1]), int(cols[2])
                         
+                        #SEX CHROMSOME
                         if chrom in ['chrX', 'chrY']:
                            continue
                         
@@ -203,12 +206,20 @@ def load_all_peaks_at_once(epigenome_id):
 
 
 def scan_chromosome_parallel(args):
+
+    #chrom: chromosome name
+    #chrom_size: size of the chromosome
+    #peaks: list of tuples (start, end) for peaks in this chromosome
+    #window_size: size of the scanning window
+    #step_size: step size for scanning windows
+    #min_overlap: minimum overlap required with a peak to consider it a modification site
    
     chrom, chrom_size, peaks, window_size, step_size, min_overlap = args
     
     modification_sites = []
     total_windows = 0
     
+    #goes up to chrom_size -window_size + 1 to make sure we do not go out of bounds
     for window_start in range(0, chrom_size - window_size + 1, step_size):
         window_end = window_start + window_size
         total_windows += 1
@@ -274,7 +285,7 @@ def scan_genome_for_modification_sites(epigenome_id, marker, all_peaks=None, app
                     
                     if config.TEST_MODE and chrom != config.TEST_CHROMOSOME:
                         continue
-                    #using binary search
+                    
                     if start >= end or start < 0:
                         continue
                     
@@ -305,6 +316,7 @@ def scan_genome_for_modification_sites(epigenome_id, marker, all_peaks=None, app
     process_args = []
     for chrom in sorted(chrom_sizes.keys()):
         if chrom in peaks_by_chrom:
+            #processing paramters, chromosome name, chromosome size, peaks for this chromosome, window size, step size, minimum overlap
             args = (chrom, chrom_sizes[chrom], peaks_by_chrom[chrom], 
                    config.WINDOW_SIZE, config.STEP_SIZE, config.MIN_OVERLAP)
             process_args.append(args)
@@ -312,22 +324,24 @@ def scan_genome_for_modification_sites(epigenome_id, marker, all_peaks=None, app
   
     if len(process_args) > 1 and config.USE_MULTIPROCESSING:
         with mp.Pool(min(config.N_PROCESSES, len(process_args))) as pool:
+            #different processes will handle different chromsomes
+            #call to earlier scan_chromosome_parallel function - scanning each chromosome in parallel
             chrom_results = pool.map(scan_chromosome_parallel, process_args)
     else:
         
         chrom_results = [scan_chromosome_parallel(args) for args in process_args]
     
     
-    modification_sites = []
+    modification_sites = [] #will store all valid genomic regions that overlap histone peaks
     total_windows = 0
-    for chrom_sites, chrom_windows in chrom_results:
+    for chrom_sites, chrom_windows in chrom_results: #chrom results is a list of tuples (modification_sites (list), total_windows)
         modification_sites.extend(chrom_sites)
         total_windows += chrom_windows
         
         
         if chrom_sites:
             chrom = chrom_sites[0][0] if chrom_sites else "unknown"
-            log_progress(f"  {chrom}: {len(chrom_sites):,} modification sites")
+            log_progress(f"  {chrom}: {len(chrom_sites):,} modification sites") #this is just to report progress tbh
     
     sites_count = len(modification_sites)
     log_progress(f"Found {sites_count:,} modification sites from {total_windows:,} windows scanned", start_time)
@@ -338,9 +352,10 @@ def scan_genome_for_modification_sites(epigenome_id, marker, all_peaks=None, app
                     f"Paper discards epigenomes with <{config.MIN_SITES_THRESHOLD:,} sites per marker.")
         return []
     
-    return modification_sites
+    return modification_sites #returns a list of valid genomic regions for downstream proessing
 
 
+#checks if there are missing files for a given epigenome
 def validate_epigenome_files(epigenome_id):
    
     missing_files = []
@@ -358,13 +373,13 @@ def validate_epigenome_files(epigenome_id):
     
     return len(missing_files) == 0, missing_files
 
-
+#makes sure dataset does not already exist
 def check_dataset_exists(epigenome_id, target_marker):
     
     output_path = config.get_output_path(epigenome_id, target_marker)
     return os.path.exists(output_path)
 
-
+#makes sure that dataset is valid - we need certain keys
 def validate_dataset_integrity(output_path):
     try:
         data = np.load(output_path, allow_pickle=True)
@@ -399,18 +414,18 @@ def load_all_histone_markers_for_epigenome(epigenome_id, target_marker):
     
     start_time = log_progress(f"Processing all histone markers for {epigenome_id}...")
     
-    
+    #just making sure again that the files exist
     files_valid, missing_files = validate_epigenome_files(epigenome_id)
     if not files_valid:
         raise FileNotFoundError(f"Missing files for {epigenome_id}: {missing_files}")
     
-  
+    #returns {marker: {chrom: [(start, end), ...]}}
     all_peaks = load_all_peaks_at_once(epigenome_id)
     
-    all_marker_sites = {}
-    marker_stats = {}
+    all_marker_sites = {} # stores modification sites for each marker
+    marker_stats = {} #stores site counts for logging -for myself
     
-    
+    #loops through all 7 markers and finds 200 bp windows that overlap significantly with this markers peaks
     for marker in config.ALL_MARKERS:
         marker_sites = scan_genome_for_modification_sites(
             epigenome_id, marker, all_peaks=all_peaks, apply_threshold=True
@@ -420,9 +435,9 @@ def load_all_histone_markers_for_epigenome(epigenome_id, target_marker):
             log_progress(f"ERROR: {epigenome_id}-{marker} has insufficient sites, skipping epigenome")
             return None, None, None
         
-        marker_sites_set = set(marker_sites)
-        all_marker_sites[marker] = marker_sites_set
-        marker_stats[marker] = len(marker_sites_set)
+        marker_sites_set = set(marker_sites) #removes duplicate sites
+        all_marker_sites[marker] = marker_sites_set #save sites for this marker in main dic
+        marker_stats[marker] = len(marker_sites_set) #for logging just counting sites
         
         log_progress(f"  {marker}: {len(marker_sites_set):,} sites")
     
@@ -439,6 +454,7 @@ def load_all_histone_markers_for_epigenome(epigenome_id, target_marker):
             other_markers_sites.update(sites)
     
     # DeepHistone negative strategy: other markers - target marker
+    #pretty much a negative set of OTHER sites that are not the target site
     negative_sites = other_markers_sites - target_sites
     
     
@@ -454,7 +470,7 @@ def load_all_histone_markers_for_epigenome(epigenome_id, target_marker):
     
     return list(target_sites), list(negative_sites), all_marker_sites
 
-
+#are expanding to 1000 bp for the cnn -- might improve on this later
 def expand_regions_to_1000bp(regions_200bp):
 
     start_time = log_progress(f"Expanding {len(regions_200bp):,} regions from 200bp to 1000bp...")
@@ -521,8 +537,10 @@ def extract_sequences(regions):
             expected_length = region_end - region_start
             
             try:
-                seq = genome[chrom][region_start:region_end].seq.upper()
+                #ex genome['chr1'][600:1600] returns 1000bp of DNA from chromosome 1
+                seq = genome[chrom][region_start:region_end].seq.upper() #using pyfaidx to get DNA from genome FASTA, standardizing to uppercase
                 
+                #making sure it is the correct length if not pad with Ns or cut
                 if len(seq) != expected_length:
                     if len(seq) < expected_length:
                         seq = seq.ljust(expected_length, 'N')
@@ -532,6 +550,7 @@ def extract_sequences(regions):
                 n_count = seq.count('N')
                 n_fraction = n_count / len(seq)
                 
+                #only let 10% of the sequence be Ns
                 if n_fraction > config.MAX_N_FRACTION:
                     invalid_count += 1
                     seq = 'N' * expected_length
@@ -558,12 +577,12 @@ def extract_dnase_openness_scores(epigenome_id, regions):
 
     start_time = log_progress(f"Extracting DNase openness scores for {len(regions):,} regions...")
     
-    dnase_file = config.get_dnase_path(epigenome_id)
+    dnase_file = config.get_dnase_path(epigenome_id) #get file path
     dnase_peaks_by_chrom = defaultdict(list)
     
     if not os.path.exists(dnase_file):
         log_progress(f"Warning: DNase file {dnase_file} not found, using zero openness scores")
-        return [np.zeros(config.FINAL_WINDOW_SIZE, dtype=np.float32) for _ in regions]
+        return [np.zeros(config.FINAL_WINDOW_SIZE, dtype=np.float32) for _ in regions] #if there is no DNase file, return zero scores for all regions -- ie closed chromatin
     
     # Parse DNase peaks
     total_dnase_peaks = 0
@@ -578,14 +597,16 @@ def extract_dnase_openness_scores(epigenome_id, regions):
                 continue
                 
             try:
+                # col[0] is chromosome name, col[1] is start position, col[2] is end position
                 chrom, start, end = cols[0], int(cols[1]), int(cols[2])
-
+                 
+                 #SEX CHROMOSOME
                 if chrom in ['chrX', 'chrY']:
                     continue
                 
                 if config.TEST_MODE and chrom != config.TEST_CHROMOSOME:
                     continue
-                
+                #using signal value from column 6 as fold enrichment
                 fold_enrichment = 1.0
                 try:
                     if len(cols) > 6:
@@ -604,7 +625,7 @@ def extract_dnase_openness_scores(epigenome_id, regions):
     
     
     for chrom in dnase_peaks_by_chrom:
-        dnase_peaks_by_chrom[chrom].sort()
+        dnase_peaks_by_chrom[chrom].sort() #order peaks by start coordinate within each chromosome so we will have a chromosmome with a tuple of peaks (start, end, fold_enrichment)
     
     log_progress(f"Loaded {total_dnase_peaks:,} DNase peaks")
     
@@ -626,7 +647,7 @@ def extract_dnase_openness_scores(epigenome_id, regions):
                 if overlap_start < overlap_end:
                     start_idx = overlap_start - region_start
                     end_idx = overlap_end - region_start
-                    openness[start_idx:end_idx] = fold_enrichment
+                    openness[start_idx:end_idx] = fold_enrichment #looking at positions and openness at those positions will be the fold_enrichment value
         
         openness_scores.append(openness)
     
@@ -653,7 +674,11 @@ def create_natural_imbalanced_dataset(pos_sequences, pos_openness, neg_sequences
     log_progress(f"Created dataset: {pos_count:,} pos + {neg_count:,} neg = {len(all_sequences):,} total", start_time)
     log_progress(f"Natural class distribution ratio: {natural_ratio:.1f}:1 (negative:positive)")
     
-    return all_sequences, all_openness, all_labels
+    #example output
+    # Sequence: "ATCGATCG..." (1000bp DNA)
+    # Accessibility: [2.1, 0, 3.4, 0, 1.8, ...] (1000 values)
+    # Label: 1 (positive for target marker)
+    return all_sequences, all_openness, all_labels #these are the inputs to the machine learning model sequence is the sequence openness is the openness score and labels are the class labels (1 for positive, 0 for negative)
 
 
 def save_dataset_with_metadata(output_path, sequences, openness, labels, epigenome_id, target_marker, 
@@ -667,9 +692,9 @@ def save_dataset_with_metadata(output_path, sequences, openness, labels, epigeno
     sequences_array = np.array([list(seq.ljust(max_len, 'N')) for seq in sequences], dtype='U1')
     openness_array = np.array(openness, dtype=np.float32)
     
-    if genomic_keys:
+    if genomic_keys: #should have genomic keys if we are using real genomic regions
         keys_array = np.array(genomic_keys, dtype='U30')
-    else:
+    else: #generate fake ones if necessary
         n_samples = len(sequences)
         chr22_start = 16000000
         keys = [f"chr22:{chr22_start + i*1200}-{chr22_start + i*1200 + 1000}" for i in range(n_samples)]
@@ -690,7 +715,7 @@ def save_dataset_with_metadata(output_path, sequences, openness, labels, epigeno
     
     if metadata:
         save_metadata.update(metadata)
-    
+    #save to compressed archive
     np.savez_compressed(
         output_path,
         sequences=sequences_array,
@@ -723,7 +748,7 @@ def save_dataset_with_metadata(output_path, sequences, openness, labels, epigeno
     log_progress(f"Dataset saved successfully", start_time)
     return output_path
 
-
+#jumbo function that runs the entire pipeline for a single epigenome and marker combination
 def run_single_combination(epigenome_id, target_marker, logger=None):
     
     overall_start = time.time()
@@ -736,7 +761,7 @@ def run_single_combination(epigenome_id, target_marker, logger=None):
         print(f"Processing: {epigenome_id} - {target_marker}")
         print(f"{'='*60}")
 
-        
+        #if output file exists skip processing it or reprocess if not valid
         if getattr(config, "SKIP_EXISTING", False) and check_dataset_exists(epigenome_id, target_marker):
             output_path = config.get_output_path(epigenome_id, target_marker)
             is_valid, msg = validate_dataset_integrity(output_path)
@@ -754,7 +779,7 @@ def run_single_combination(epigenome_id, target_marker, logger=None):
         if target_marker not in config.ALL_MARKERS:
             raise ValueError(f"Target marker '{target_marker}' not in valid marker list: {config.ALL_MARKERS}")
 
-       
+        # Load all peaks for the epigenome
         target_sites_200bp, negative_sites_200bp, all_marker_sites = load_all_histone_markers_for_epigenome(
             epigenome_id, target_marker
         )
@@ -762,7 +787,7 @@ def run_single_combination(epigenome_id, target_marker, logger=None):
         if target_sites_200bp is None:
             raise ValueError(f"Failed to process {epigenome_id} - missing sufficient data for at least one marker")
 
-        
+        #regions iwth target marker peaks and negative regions with other markers expaned to 1000bp
         target_sites_1000bp = expand_regions_to_1000bp(target_sites_200bp)
         negative_sites_1000bp = expand_regions_to_1000bp(negative_sites_200bp)
 
@@ -771,7 +796,7 @@ def run_single_combination(epigenome_id, target_marker, logger=None):
         if len(negative_sites_1000bp) == 0:
             raise ValueError("No valid negative regions after expansion to 1000bp")
 
-        
+        #extract the sequences and DNase openness scores for the expanded regions
         pos_sequences = extract_sequences(target_sites_1000bp)
         neg_sequences = extract_sequences(negative_sites_1000bp)
 
@@ -779,7 +804,7 @@ def run_single_combination(epigenome_id, target_marker, logger=None):
         pos_openness = extract_dnase_openness_scores(epigenome_id, target_sites_1000bp)
         neg_openness = extract_dnase_openness_scores(epigenome_id, negative_sites_1000bp)
 
-        
+        # merge the two
         sequences, openness, labels = create_natural_imbalanced_dataset(
             pos_sequences, pos_openness, neg_sequences, neg_openness
         )

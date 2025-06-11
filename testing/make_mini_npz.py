@@ -8,5 +8,5 @@ with np.load("../data/converted/E003_all_markers_merged.npz", mmap_mode=None) as
     label = f['label'][:100]
 
 print("Saving mini version...")
-np.savez("data/converted/mini_merged.npz", keys=keys, dna=dna, dnase=dnase, label=label)
+np.savez("../data/converted/mini_merged.npz", keys=keys, dna=dna, dnase=dnase, label=label)
 print("Done.")

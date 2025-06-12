@@ -19,7 +19,7 @@ if torch.cuda.is_available():
 
 # Settings
 batchsize = 20
-data_file = 'data/converted/E005_all_markers_merged.npz'
+data_file = 'data/final/E005_all_markers_merged.npz'
 
 # Extract epigenome name from data file
 epigenome_name = os.path.basename(data_file).split('_')[0]

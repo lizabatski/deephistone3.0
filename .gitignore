@@ -93,6 +93,7 @@ results/
 output/
 figures/
 plots/
+unusedscripts/
 
 
 config.ini

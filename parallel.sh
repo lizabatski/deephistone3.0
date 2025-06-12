@@ -22,7 +22,7 @@ echo "Node: $(hostname), Start: $(date)"
 module load python/3.9 scipy-stack
 
 # 7 markers in correct order
-MARKERS=("H3K4me1" "H3K4me3" "H3K36me3" "H3K27me3" "H3K9me3" "H3K9ac" "H3K27ac")
+MARKERS=("H3K4me1" "H3K4me3" "H3K27me3" "H3K36me3" "H3K9me3" "H3K9ac" "H3K27ac")
 MARKER=${MARKERS[$SLURM_ARRAY_TASK_ID-1]}
 
 echo "Processing $EPIGENOME-$MARKER (${SLURM_ARRAY_TASK_ID}/7)"

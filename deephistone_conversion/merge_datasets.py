@@ -16,11 +16,11 @@ import glob
 class MergerConfig:
     def __init__(self):
         # Input/output directories
-        self.INPUT_DIR = "../data/converted"
+        self.BASE_INPUT_DIR = "../data/converted"
         self.DEFAULT_OUTPUT = "../data/merged_dataset.npz"
         
         # The 7 histone markers in order
-        self.ALL_MARKERS = ['H3K4me3', 'H3K4me1', 'H3K36me3', 'H3K27me3', 'H3K9me3', 'H3K9ac','H3K27ac']
+        self.ALL_MARKERS = ['H3K4me1', 'H3K4me3', 'H3K27me3', 'H3K36me3', 'H3K9me3', 'H3K9ac', 'H3K27ac']
         
         # Processing settings
         self.VERIFY_CONSISTENCY = True  # Verify that all datasets have same samples
@@ -55,12 +55,40 @@ def find_converted_datasets():
     if not os.path.exists(config.INPUT_DIR):
         raise FileNotFoundError(f"Input directory not found: {config.INPUT_DIR}")
     
-    # Look for files with '_expected_format.npz' suffix
-    pattern = os.path.join(config.INPUT_DIR, "*_expected_format.npz")
-    files = glob.glob(pattern)
+    # Try multiple patterns to find the files
+    patterns = [
+        os.path.join(config.INPUT_DIR, "*_expected_format.npz"),  # Files directly in the directory
+        os.path.join(config.INPUT_DIR, "*", "*_expected_format.npz"),  # Files in subdirectories
+    ]
+    
+    files = []
+    for pattern in patterns:
+        found_files = glob.glob(pattern)
+        files.extend(found_files)
+        print(f"Pattern {pattern}: found {len(found_files)} files")
     
     if not files:
+        print(f"No files found. Searched patterns:")
+        for pattern in patterns:
+            print(f"  {pattern}")
+        print(f"Directory contents:")
+        if os.path.exists(config.INPUT_DIR):
+            for item in os.listdir(config.INPUT_DIR):
+                item_path = os.path.join(config.INPUT_DIR, item)
+                if os.path.isdir(item_path):
+                    print(f"  DIR:  {item}/")
+                    # Show contents of subdirectories
+                    try:
+                        for subitem in os.listdir(item_path):
+                            print(f"        {subitem}")
+                    except:
+                        pass
+                else:
+                    print(f"  FILE: {item}")
         raise FileNotFoundError(f"No converted datasets found in {config.INPUT_DIR}")
+    
+    # Remove duplicates
+    files = list(set(files))
     
     # Parse filenames to extract epigenome and marker info
     datasets = []
@@ -312,8 +340,8 @@ def main():
     parser = argparse.ArgumentParser(description="Merge converted datasets into a single multi-task dataset")
     parser.add_argument('--output', '-o', default=config.DEFAULT_OUTPUT,
                        help='Output path for merged dataset')
-    parser.add_argument('--input-dir', default=config.INPUT_DIR,
-                       help='Directory containing converted datasets')
+    parser.add_argument('--input-dir', default=config.BASE_INPUT_DIR,
+                   help='Directory containing converted datasets')
     parser.add_argument('--verify', action='store_true', default=True,
                        help='Verify dataset consistency (default: True)')
     parser.add_argument('--no-verify', dest='verify', action='store_false',

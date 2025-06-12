@@ -15,8 +15,8 @@ mkdir -p logs
 cd /home/ekourb/deephistone/deephistone_conversion
 
 # Define the datasets to process
-EPIGENOME_IDS=("E003" "E003" "E003" "E003" "E003" "E003" "E003")
-MARKERS=("H3K4me3" "H3K4me1" "H3K36me3" "H3K27me3" "H3K9me3" "H3K27ac" "H3K9ac")
+EPIGENOME_IDS=("E005" "E005" "E005" "E005" "E005" "E005" "E005")
+MARKERS=("H3K4me1" "H3K4me3" "H3K36me3" "H3K27me3" "H3K9me3" "H3K9ac" "H3K27ac")
 
 # Get the current task's parameters
 EPIGENOME_ID=${EPIGENOME_IDS[$SLURM_ARRAY_TASK_ID-1]}

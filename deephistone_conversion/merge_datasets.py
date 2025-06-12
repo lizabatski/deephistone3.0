@@ -20,7 +20,7 @@ class MergerConfig:
         self.DEFAULT_OUTPUT = "../data/merged_dataset.npz"
         
         # The 7 histone markers in order
-        self.ALL_MARKERS = ['H3K4me3', 'H3K4me1', 'H3K36me3', 'H3K27me3', 'H3K9me3', 'H3K27ac', 'H3K9ac']
+        self.ALL_MARKERS = ['H3K4me3', 'H3K4me1', 'H3K36me3', 'H3K27me3', 'H3K9me3', 'H3K9ac','H3K27ac']
         
         # Processing settings
         self.VERIFY_CONSISTENCY = True  # Verify that all datasets have same samples

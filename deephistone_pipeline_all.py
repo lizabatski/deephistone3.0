@@ -26,7 +26,7 @@ class DeepHistoneConfig:
         self.RANDOM_SEED = 42
         
         #  7 histone markers from paper Table 1
-        self.ALL_MARKERS = ['H3K4me3', 'H3K4me1', 'H3K36me3', 'H3K27me3', 'H3K9me3', 'H3K27ac', 'H3K9ac']
+        self.ALL_MARKERS = ['H3K4me1', 'H3K4me3', 'H3K27me3', 'H3K36me3', 'H3K9me3', 'H3K9ac', 'H3K27ac']
         
         # The 15 epigenomes that passed their filtering (from Table 1)
         self.VALID_EPIGENOMES = [
@@ -83,8 +83,8 @@ class DeepHistoneConfig:
                     if len(parts) >= 2:
                         chrom, size = parts[0], int(parts[1])
                         
-                        if chrom in ['chrX', 'chrY']: #made the decision to not include sex chromosomes -- maybe add this back later
-                            continue
+                        # if chrom in ['chrX', 'chrY']: #made the decision to not include sex chromosomes -- maybe add this back later
+                        #     continue
                         # test mode
                         if self.TEST_MODE and chrom != self.TEST_CHROMOSOME: #currently test chromosome is chr 22 
                             continue
@@ -179,8 +179,8 @@ def load_all_peaks_at_once(epigenome_id):
                         chrom, start, end = cols[0], int(cols[1]), int(cols[2])
                         
                         #SEX CHROMSOME
-                        if chrom in ['chrX', 'chrY']:
-                           continue
+                        # if chrom in ['chrX', 'chrY']:
+                        #    continue
                         
                         if config.TEST_MODE and chrom != config.TEST_CHROMOSOME:
                             continue
@@ -280,8 +280,8 @@ def scan_genome_for_modification_sites(epigenome_id, marker, all_peaks=None, app
                 try:
                     chrom, start, end = cols[0], int(cols[1]), int(cols[2])
                     
-                    if chrom in ['chrX', 'chrY']:
-                       continue
+                    # if chrom in ['chrX', 'chrY']:
+                    #    continue
                     
                     if config.TEST_MODE and chrom != config.TEST_CHROMOSOME:
                         continue
@@ -601,8 +601,8 @@ def extract_dnase_openness_scores(epigenome_id, regions):
                 chrom, start, end = cols[0], int(cols[1]), int(cols[2])
                  
                  #SEX CHROMOSOME
-                if chrom in ['chrX', 'chrY']:
-                    continue
+                # if chrom in ['chrX', 'chrY']:
+                #     continue
                 
                 if config.TEST_MODE and chrom != config.TEST_CHROMOSOME:
                     continue

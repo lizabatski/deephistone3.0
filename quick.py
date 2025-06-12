@@ -1,62 +1,135 @@
-import torch
 import numpy as np
-import copy
-from model import DeepHistone
-from utils import metrics, model_train, model_eval
-import time
 
-# Settings
-data_file = 'data/converted/E003_all_markers_merged.npz'  # adjust path if needed
-batchsize = 8  # small batch size for quick test
+def randomly_sample_mini_labels(data_file, num_samples=20):
+    """Randomly sample and display labels from mini dataset"""
+    
+    print("RANDOM SAMPLE OF MINI DATASET LABELS")
+    print("="*60)
+    
+    # Load mini dataset
+    with np.load(data_file) as f:
+        keys = f['keys'][:]
+        labels = f['label'][:].squeeze()  # Remove middle dimension if present
+        
+    print(f"Dataset shape: {labels.shape}")
+    print(f"Total samples available: {len(keys)}")
+    print()
+    
+    # Randomly sample indices
+    np.random.seed(42)  # For reproducibility
+    if num_samples > len(keys):
+        num_samples = len(keys)
+        
+    random_indices = np.random.choice(len(keys), num_samples, replace=False)
+    random_indices = np.sort(random_indices)  # Sort for easier reading
+    
+    histone_names = ['H3K4me1', 'H3K4me3', 'H3K27me3', 'H3K36me3', 'H3K9me3', 'H3K9ac', 'H3K27ac']
+    
+    print(f"Randomly sampled {num_samples} labels:")
+    print()
+    print("Index  Key                     " + "  ".join([h[:8] for h in histone_names]))
+    print("-" * (30 + 10 * len(histone_names)))
+    
+    for i, idx in enumerate(random_indices):
+        key_str = str(keys[idx])[:25].ljust(25)
+        label_str = "  ".join([str(int(labels[idx, j])) for j in range(min(7, labels.shape[1]))])
+        print(f"{idx:3d}    {key_str} {label_str}")
+    
+    print()
+    
+    # Quick stats on the random sample
+    print("STATISTICS OF RANDOM SAMPLE:")
+    print("-" * 40)
+    
+    sample_labels = labels[random_indices]
+    
+    for j, histone in enumerate(histone_names[:min(7, labels.shape[1])]):
+        pos_count = np.sum(sample_labels[:, j])
+        pct = pos_count / num_samples * 100
+        print(f"{histone:10s}: {pos_count:2d}/{num_samples} ({pct:5.1f}%)")
+    
+    print()
+    
+    # Check for patterns in this random sample
+    print("PATTERN CHECK ON RANDOM SAMPLE:")
+    print("-" * 40)
+    
+    # Samples with all marks
+    all_marks = np.where(np.sum(sample_labels, axis=1) == 7)[0]
+    print(f"Samples with ALL marks: {len(all_marks)}")
+    if len(all_marks) > 0:
+        for idx in all_marks:
+            orig_idx = random_indices[idx]
+            print(f"  Index {orig_idx}: {keys[orig_idx]}")
+    
+    # Samples with no marks
+    no_marks = np.where(np.sum(sample_labels, axis=1) == 0)[0]
+    print(f"Samples with NO marks: {len(no_marks)}")
+    if len(no_marks) > 0:
+        for idx in no_marks[:3]:  # Show first 3
+            orig_idx = random_indices[idx]
+            print(f"  Index {orig_idx}: {keys[orig_idx]}")
+    
+    # Check for identical patterns in this sample
+    print(f"Samples with 1-6 marks: {num_samples - len(all_marks) - len(no_marks)}")
+    
+    print()
+    
+    # Check correlations in random sample
+    print("CORRELATIONS IN RANDOM SAMPLE:")
+    print("-" * 40)
+    
+    if len(sample_labels) > 1 and sample_labels.shape[1] >= 7:
+        for i in range(7):
+            for j in range(i+1, 7):
+                # Only calculate correlation if there's variation
+                if np.var(sample_labels[:, i]) > 0 and np.var(sample_labels[:, j]) > 0:
+                    corr = np.corrcoef(sample_labels[:, i], sample_labels[:, j])[0, 1]
+                    status = "❌" if abs(corr) > 0.95 else "✓"
+                    print(f"{status} {histone_names[i][:8]} vs {histone_names[j][:8]}: {corr:.3f}")
+                else:
+                    print(f"? {histone_names[i][:8]} vs {histone_names[j][:8]}: no variation")
+    
+    return random_indices, sample_labels
 
-print('Loading dataset...')
-start = time.time()
+def show_specific_indices(data_file, indices):
+    """Show labels for specific indices"""
+    
+    print(f"\nSPECIFIC INDICES: {indices}")
+    print("-" * 40)
+    
+    with np.load(data_file) as f:
+        keys = f['keys'][:]
+        labels = f['label'][:].squeeze()
+        
+    histone_names = ['H3K4me1', 'H3K4me3', 'H3K27me3', 'H3K36me3', 'H3K9me3', 'H3K9ac', 'H3K27ac']
+    
+    print("Index  Key                     " + "  ".join([h[:8] for h in histone_names]))
+    print("-" * (30 + 10 * len(histone_names)))
+    
+    for idx in indices:
+        if idx < len(keys):
+            key_str = str(keys[idx])[:25].ljust(25)
+            label_str = "  ".join([str(int(labels[idx, j])) for j in range(min(7, labels.shape[1]))])
+            print(f"{idx:3d}    {key_str} {label_str}")
+        else:
+            print(f"{idx:3d}    INDEX OUT OF RANGE")
 
-# Load entire dataset into memory
-with np.load(data_file, mmap_mode=None) as f:
-    keys = f['keys']
-    dna_all = f['dna']
-    dnase_all = f['dnase']
-    label_all = f['label']
-
-    print("Loaded full arrays:")
-    print("dna_all shape:", dna_all.shape)       # e.g., (N, 4, 1000)
-    print("dnase_all shape:", dnase_all.shape)   # e.g., (N, 1, 1000)
-    print("label_all shape:", label_all.shape)   # e.g., (N, 7)
-    print("keys shape:", keys.shape)             # (N,)
-
-    # Inspect one example entry
-    example_index = 0
-    print("\nExample entry shapes:")
-    print("dna_all[0] shape:", dna_all[example_index].shape)
-    print("dnase_all[0] shape:", dnase_all[example_index].shape)
-    print("label_all[0] shape:", label_all[example_index].shape)
-    print("label_all[0] =", label_all[example_index])
-
-subset_keys = keys[:100]  # small test batch
-
-# Use in-memory arrays to build dictionaries
-dna_dict = {k: dna_all[i] for i, k in enumerate(subset_keys)}
-dnase_dict = {k: dnase_all[i] for i, k in enumerate(subset_keys)}
-label_dict = {k: label_all[i] for i, k in enumerate(subset_keys)}
-
-print("Time to build dicts:", time.time() - start, "seconds")
-
-# Shuffle and split a small sample
-np.random.shuffle(subset_keys)
-train_keys = subset_keys[:20]
-valid_keys = subset_keys[20:30]
-
-# Check for GPU availability
-use_gpu = torch.cuda.is_available()
-model = DeepHistone(use_gpu)
-
-print('Running quick training and evaluation...')
-train_loss = model_train(train_keys, model, batchsize, dna_dict, dnase_dict, label_dict)
-valid_loss, valid_lab, valid_pred = model_eval(valid_keys, model, batchsize, dna_dict, dnase_dict, label_dict)
-valid_auprc, valid_auroc = metrics(valid_lab, valid_pred, split='Valid', loss=valid_loss)
-
-print('Quick test completed.')
-print(f'Validation loss: {valid_loss:.4f}')
-print(f'Validation auPRC: {valid_auprc}')
-print(f'Validation auROC: {valid_auroc}')
+if __name__ == "__main__":
+    # Random sample from mini dataset
+    data_file = 'data/converted/mini_merged.npz'
+    
+    print("1. RANDOM SAMPLE (20 samples):")
+    random_indices, sample_labels = randomly_sample_mini_labels(data_file, 20)
+    
+    print("\n" + "="*60)
+    print("2. FIRST 10 SAMPLES (for comparison):")
+    show_specific_indices(data_file, list(range(10)))
+    
+    print("\n" + "="*60)
+    print("3. LAST 10 SAMPLES (for comparison):")
+    show_specific_indices(data_file, list(range(90, 100)))
+    
+    print("\n" + "="*60)
+    print("4. MIDDLE SAMPLES (for comparison):")
+    show_specific_indices(data_file, list(range(45, 55)))

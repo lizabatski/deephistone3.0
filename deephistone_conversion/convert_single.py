@@ -26,7 +26,7 @@ class SingleConverterConfig:
         self.CONTINUE_ON_ERROR = True
         
         # The 7 histone markers in order
-        self.ALL_MARKERS = ['H3K4me3', 'H3K4me1', 'H3K36me3', 'H3K27me3', 'H3K9me3', 'H3K27ac', 'H3K9ac']
+        self.ALL_MARKERS = ['H3K4me1', 'H3K4me3', 'H3K27me3', 'H3K36me3', 'H3K9me3', 'H3K9ac', 'H3K27ac']
         
         # Test mode suffix (if you used test mode)
         self.TEST_MODE_SUFFIX = ""  # Set to "" if you didn't use test mode

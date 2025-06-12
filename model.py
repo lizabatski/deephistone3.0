@@ -111,53 +111,64 @@ class NetDeepHistone(nn.Module):
 		return out
 
 
-class DeepHistone():
-	def __init__(self,use_gpu,learning_rate=0.001):
-		self.forward_fn = NetDeepHistone()
-		self.criterion  = nn.BCELoss()
-		self.optimizer  = optim.Adam(self.forward_fn.parameters(), lr=learning_rate, weight_decay = 0)
-		self.use_gpu    = use_gpu
-		if self.use_gpu : self.criterion,self.forward_fn = self.criterion.cuda(), self.forward_fn.cuda()
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+import numpy as np
 
-	def updateLR(self, fold):
-		for param_group in self.optimizer.param_groups:
-			param_group['lr'] *= fold
+class DeepHistone:
+    def __init__(self, use_gpu, learning_rate=0.001):
+        self.device = torch.device("cuda" if use_gpu and torch.cuda.is_available() else "cpu")
+        self.forward_fn = NetDeepHistone().to(self.device)
+        self.criterion = nn.BCELoss().to(self.device)
+        self.optimizer = optim.Adam(self.forward_fn.parameters(), lr=learning_rate, weight_decay=0)
+        self.use_gpu = use_gpu
+        print(f"DeepHistone initialized on device: {self.device}")
 
-	def train_on_batch(self,seq_batch,dns_batch,lab_batch,): 
-		self.forward_fn.train()
-		seq_batch  = Variable(torch.Tensor(seq_batch))
-		dns_batch  = Variable(torch.Tensor(dns_batch))
-		lab_batch  = Variable(torch.Tensor(lab_batch))
-		if self.use_gpu: seq_batch, dns_batch, lab_batch = seq_batch.cuda(), dns_batch.cuda(), lab_batch.cuda()
-		output = self.forward_fn(seq_batch, dns_batch)
-		loss = self.criterion(output,lab_batch)
-		self.optimizer.zero_grad()
-		loss.backward()
-		self.optimizer.step()
-		return loss.cpu().data
+    def updateLR(self, fold):
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] *= fold
 
-	def eval_on_batch(self,seq_batch,dns_batch,lab_batch,):
-		self.forward_fn.eval()
-		seq_batch  = Variable(torch.Tensor(seq_batch))
-		dns_batch  = Variable(torch.Tensor(dns_batch))
-		lab_batch  = Variable(torch.Tensor(lab_batch))
-		if self.use_gpu: seq_batch, dns_batch, lab_batch = seq_batch.cuda(), dns_batch.cuda(), lab_batch.cuda()
-		output = self.forward_fn(seq_batch, dns_batch)
-		loss = self.criterion(output,lab_batch)
-		return loss.cpu().data,output.cpu().data.numpy()
-			
-	def test_on_batch(self, seq_batch, dns_batch):
-		self.forward_fn.eval()
-		seq_batch  = Variable(torch.Tensor(seq_batch))
-		dns_batch  = Variable(torch.Tensor(dns_batch))
-		if self.use_gpu: seq_batch, dns_batch,  = seq_batch.cuda(), dns_batch.cuda()
-		output = self.forward_fn(seq_batch, dns_batch)
-		pred = output.cpu().data.numpy()
-		return pred
-	
-	def save_model(self, path):
-		torch.save(self.forward_fn.state_dict(), path)
+    def train_on_batch(self, seq_batch, dns_batch, lab_batch):
+        self.forward_fn.train()
+        seq_batch = torch.tensor(seq_batch, device=self.device, dtype=torch.float32)
+        dns_batch = torch.tensor(dns_batch, device=self.device, dtype=torch.float32)
+        lab_batch = torch.tensor(lab_batch, device=self.device, dtype=torch.float32)
 
+        output = self.forward_fn(seq_batch, dns_batch)
+        loss = self.criterion(output, lab_batch)
 
-	def load_model(self, path):
-		self.forward_fn.load_state_dict(torch.load(path))
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+        return loss.item()
+
+    def eval_on_batch(self, seq_batch, dns_batch, lab_batch):
+        self.forward_fn.eval()
+        with torch.no_grad():
+            seq_batch = torch.tensor(seq_batch, device=self.device, dtype=torch.float32)
+            dns_batch = torch.tensor(dns_batch, device=self.device, dtype=torch.float32)
+            lab_batch = torch.tensor(lab_batch, device=self.device, dtype=torch.float32)
+
+            output = self.forward_fn(seq_batch, dns_batch)
+            loss = self.criterion(output, lab_batch)
+
+        return loss.item(), output.detach().cpu().numpy()
+
+    def test_on_batch(self, seq_batch, dns_batch):
+        self.forward_fn.eval()
+        with torch.no_grad():
+            seq_batch = torch.tensor(seq_batch, device=self.device, dtype=torch.float32)
+            dns_batch = torch.tensor(dns_batch, device=self.device, dtype=torch.float32)
+            output = self.forward_fn(seq_batch, dns_batch)
+
+        return output.detach().cpu().numpy()
+
+    def save_model(self, path):
+        torch.save(self.forward_fn.state_dict(), path)
+
+    def load_model(self, path):
+        self.forward_fn.load_state_dict(torch.load(path, map_location=self.device))
+

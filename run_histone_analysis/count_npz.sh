@@ -9,7 +9,7 @@
 #SBATCH --mem=16GB
 #SBATCH --time=02:00:00
 #SBATCH --mail-type=BEGIN,END,FAIL
-#SBATCH --mail-user=your-email@domain.com
+#SBATCH --mail-user=elizabeth.kourbatski@mail.mcgill.ca
 
 # Load required modules
 module load python/3.9
@@ -24,7 +24,7 @@ echo "Working directory: $(pwd)"
 # Configuration
 EPIGENOME_ID="E005"  # Change this to analyze different epigenomes
 
-# Define paths - ADJUST THESE TO YOUR ENVIRONMENT
+
 SCRIPT_DIR="$HOME/deephistone/run_histone_analysis"    # Directory containing your Python scripts
 DATA_DIR="$HOME/deephistone/data/converted/${EPIGENOME_ID}"  # Directory containing NPZ files
 RESULTS_DIR="$HOME/deephistone/results/histone_counts"       # Output directory

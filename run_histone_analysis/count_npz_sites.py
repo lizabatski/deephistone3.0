@@ -12,6 +12,7 @@ EPIGENOME_CONFIGS = {
             'H3K36me3', 'H3K9me3', 'H3K9ac', 'H3K27ac'
         ],
         'file_patterns': [
+            "E003_{marker}_deephistone_expected_format.npz",
             "E003_{marker}_deephistone.npz",
             "{marker}.npz",
             "{marker}_sites.npz",
@@ -50,6 +51,7 @@ EPIGENOME_CONFIGS = {
             'H3K36me3', 'H3K9me3', 'H3K9ac', 'H3K27ac'
         ],
         'file_patterns': [
+            "E006_{marker}_deephistone_expected_format.npz",
             "E006_{marker}_deephistone.npz",
             "E006_{marker}.npz",
             "{marker}_E006.npz",
@@ -69,6 +71,7 @@ EPIGENOME_CONFIGS = {
             'H3K36me3', 'H3K9me3', 'H3K9ac', 'H3K27ac'
         ],
         'file_patterns': [
+            "E007_{marker}_deephistone_expected_format.npz",
             "E007_{marker}_deephistone.npz",
             "E007_{marker}.npz",
             "{marker}_E007.npz",
@@ -88,6 +91,7 @@ EPIGENOME_CONFIGS = {
             'H3K36me3', 'H3K9me3', 'H3K9ac', 'H3K27ac'
         ],
         'file_patterns': [
+            "E008_{marker}_deephistone_expected_format.npz",
             "E008_{marker}_deephistone.npz",
             "E008_{marker}.npz",
             "{marker}_E008.npz",
@@ -107,6 +111,7 @@ EPIGENOME_CONFIGS = {
             'H3K36me3', 'H3K9me3', 'H3K9ac', 'H3K27ac'
         ],
         'file_patterns': [
+            "E017_{marker}_deephistone_expected_format.npz",
             "E017_{marker}_deephistone.npz",
             "E017_{marker}.npz",
             "{marker}_E017.npz",
@@ -126,6 +131,7 @@ EPIGENOME_CONFIGS = {
             'H3K36me3', 'H3K9me3', 'H3K9ac', 'H3K27ac'
         ],
         'file_patterns': [
+            "E114_{marker}_deephistone_expected_format.npz",
             "E114_{marker}_deephistone.npz",
             "E114_{marker}.npz",
             "{marker}_E114.npz",
@@ -145,6 +151,7 @@ EPIGENOME_CONFIGS = {
             'H3K36me3', 'H3K9me3', 'H3K9ac', 'H3K27ac'
         ],
         'file_patterns': [
+            "E117_{marker}_deephistone_expected_format.npz",
             "E117_{marker}_deephistone.npz",
             "E117_{marker}.npz",
             "{marker}_E117.npz",
@@ -164,6 +171,7 @@ EPIGENOME_CONFIGS = {
             'H3K36me3', 'H3K9me3', 'H3K9ac', 'H3K27ac'
         ],
         'file_patterns': [
+            "E118_{marker}_deephistone_expected_format.npz",
             "E118_{marker}_deephistone.npz",
             "E118_{marker}.npz",
             "{marker}_E118.npz",
@@ -183,6 +191,7 @@ EPIGENOME_CONFIGS = {
             'H3K36me3', 'H3K9me3', 'H3K9ac', 'H3K27ac'
         ],
         'file_patterns': [
+            "E119_{marker}_deephistone_expected_format.npz",
             "E119_{marker}_deephistone.npz",
             "E119_{marker}.npz",
             "{marker}_E119.npz",
@@ -202,6 +211,7 @@ EPIGENOME_CONFIGS = {
             'H3K36me3', 'H3K9me3', 'H3K9ac', 'H3K27ac'
         ],
         'file_patterns': [
+            "E121_{marker}_deephistone_expected_format.npz",
             "E121_{marker}_deephistone.npz",
             "E121_{marker}.npz",
             "{marker}_E121.npz",
@@ -221,6 +231,7 @@ EPIGENOME_CONFIGS = {
             'H3K36me3', 'H3K9me3', 'H3K9ac', 'H3K27ac'
         ],
         'file_patterns': [
+            "E122_{marker}_deephistone_expected_format.npz",
             "E122_{marker}_deephistone.npz",
             "E122_{marker}.npz",
             "{marker}_E122.npz",
@@ -240,6 +251,7 @@ EPIGENOME_CONFIGS = {
             'H3K36me3', 'H3K9me3', 'H3K9ac', 'H3K27ac'
         ],
         'file_patterns': [
+            "E124_{marker}_deephistone_expected_format.npz",
             "E124_{marker}_deephistone.npz",
             "E124_{marker}.npz",
             "{marker}_E124.npz",
@@ -259,6 +271,7 @@ EPIGENOME_CONFIGS = {
             'H3K36me3', 'H3K9me3', 'H3K9ac', 'H3K27ac'
         ],
         'file_patterns': [
+            "E125_{marker}_deephistone_expected_format.npz",
             "E125_{marker}_deephistone.npz",
             "E125_{marker}.npz",
             "{marker}_E125.npz",
@@ -278,6 +291,7 @@ EPIGENOME_CONFIGS = {
             'H3K36me3', 'H3K9me3', 'H3K9ac', 'H3K27ac'
         ],
         'file_patterns': [
+            "E127_{marker}_deephistone_expected_format.npz",
             "E127_{marker}_deephistone.npz",
             "E127_{marker}.npz",
             "{marker}_E127.npz",

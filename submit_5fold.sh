@@ -3,7 +3,7 @@
 #SBATCH --account=def-majewski
 #SBATCH --time=24:00:00               # 24 hours for full dataset 
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=32G
+#SBATCH --mem=128G
 #SBATCH --gres=gpu:1                  # Request 1 GPU
 #SBATCH --output=5fold_full_%j.out
 #SBATCH --error=5fold_full_%j.err

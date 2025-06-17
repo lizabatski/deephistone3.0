@@ -29,7 +29,7 @@ echo "Running MINI dataset (100 samples)"
 echo "----------------------------------------"
 
 # Run the training script
-python train_5fold.py
+python train_5fold_mini.py
 
 echo "----------------------------------------"
 echo "Finished at: $(date)"

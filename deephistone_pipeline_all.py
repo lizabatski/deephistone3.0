@@ -632,6 +632,7 @@ def extract_dnase_openness_scores(epigenome_id, regions):
     
     openness_scores = []
     
+    
     for region_idx, (chrom, region_start, region_end) in enumerate(tqdm(regions, desc="Extracting openness")):
         region_length = region_end - region_start
         openness = np.zeros(region_length, dtype=np.float32)

@@ -11,7 +11,7 @@
 #SBATCH --mail-user=elizabeth.kourbatski@mail.mcgill.ca
 
 
-EPIGENOME="E003"  
+EPIGENOME="E005"  
 
 
 echo "=== $EPIGENOME Parallel Processing ==="

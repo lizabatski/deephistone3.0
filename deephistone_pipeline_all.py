@@ -83,8 +83,8 @@ class DeepHistoneConfig:
                     if len(parts) >= 2:
                         chrom, size = parts[0], int(parts[1])
                         
-                        # if chrom in ['chrX', 'chrY']: #made the decision to not include sex chromosomes -- maybe add this back later
-                        #     continue
+                        if chrom in ['chrX', 'chrY']: #made the decision to not include sex chromosomes -- maybe add this back later
+                            continue
                         # test mode
                         if self.TEST_MODE and chrom != self.TEST_CHROMOSOME: #currently test chromosome is chr 22 
                             continue
@@ -179,8 +179,8 @@ def load_all_peaks_at_once(epigenome_id):
                         chrom, start, end = cols[0], int(cols[1]), int(cols[2])
                         
                         #SEX CHROMSOME
-                        # if chrom in ['chrX', 'chrY']:
-                        #    continue
+                        if chrom in ['chrX', 'chrY']:
+                           continue
                         
                         if config.TEST_MODE and chrom != config.TEST_CHROMOSOME:
                             continue
@@ -280,8 +280,8 @@ def scan_genome_for_modification_sites(epigenome_id, marker, all_peaks=None, app
                 try:
                     chrom, start, end = cols[0], int(cols[1]), int(cols[2])
                     
-                    # if chrom in ['chrX', 'chrY']:
-                    #    continue
+                    if chrom in ['chrX', 'chrY']:
+                       continue
                     
                     if config.TEST_MODE and chrom != config.TEST_CHROMOSOME:
                         continue
@@ -601,8 +601,8 @@ def extract_dnase_openness_scores(epigenome_id, regions):
                 chrom, start, end = cols[0], int(cols[1]), int(cols[2])
                  
                  #SEX CHROMOSOME
-                # if chrom in ['chrX', 'chrY']:
-                #     continue
+                if chrom in ['chrX', 'chrY']:
+                  continue
                 
                 if config.TEST_MODE and chrom != config.TEST_CHROMOSOME:
                     continue
@@ -632,10 +632,18 @@ def extract_dnase_openness_scores(epigenome_id, regions):
     
     openness_scores = []
     
-    
+    # VALID_CHROMOSOMES = {f"chr{i}" for i in range(1, 23)} | {"chrX", "chrY"}
+
     for region_idx, (chrom, region_start, region_end) in enumerate(tqdm(regions, desc="Extracting openness")):
+        
+        # if chrom not in VALID_CHROMOSOMES:
+        #     continue
+        
         region_length = region_end - region_start
         openness = np.zeros(region_length, dtype=np.float32)
+
+        # if np.all(openness == 0):
+        #     continue # Skip if no DNase peaks for this region
         
         if chrom in dnase_peaks_by_chrom:
             for peak_start, peak_end, fold_enrichment in dnase_peaks_by_chrom[chrom]:
@@ -749,6 +757,23 @@ def save_dataset_with_metadata(output_path, sequences, openness, labels, epigeno
     log_progress(f"Dataset saved successfully", start_time)
     return output_path
 
+#DEBUG - find overlap and then expand (was getting super low AUPRC scores and it because DNAse alignment scores suck)
+def expand_dnase_scores_to_1000bp(openness_200bp):
+    expanded_scores = []
+    
+    for scores_200 in openness_200bp:
+        
+        scores_1000 = np.zeros(1000, dtype=np.float32)
+        
+        
+        start_idx = (1000 - 200) // 2  
+        end_idx = start_idx + 200      
+        
+        scores_1000[start_idx:end_idx] = scores_200
+        expanded_scores.append(scores_1000)
+    
+    return expanded_scores
+
 #jumbo function that runs the entire pipeline for a single epigenome and marker combination
 def run_single_combination(epigenome_id, target_marker, logger=None):
     
@@ -789,6 +814,12 @@ def run_single_combination(epigenome_id, target_marker, logger=None):
             raise ValueError(f"Failed to process {epigenome_id} - missing sufficient data for at least one marker")
 
         #regions iwth target marker peaks and negative regions with other markers expaned to 1000bp
+        # FIXED: Extract DNase scores from 200bp regions FIRST (better overlap)
+        log_progress("Extracting DNase scores from 200bp regions...")
+        pos_openness_200bp = extract_dnase_openness_scores(epigenome_id, target_sites_200bp)
+        neg_openness_200bp = extract_dnase_openness_scores(epigenome_id, negative_sites_200bp)
+
+        # expand regions to 1000bp for sequence extraction
         target_sites_1000bp = expand_regions_to_1000bp(target_sites_200bp)
         negative_sites_1000bp = expand_regions_to_1000bp(negative_sites_200bp)
 
@@ -797,13 +828,14 @@ def run_single_combination(epigenome_id, target_marker, logger=None):
         if len(negative_sites_1000bp) == 0:
             raise ValueError("No valid negative regions after expansion to 1000bp")
 
-        #extract the sequences and DNase openness scores for the expanded regions
+        # extract DNA sequences from 1000bp regions
         pos_sequences = extract_sequences(target_sites_1000bp)
         neg_sequences = extract_sequences(negative_sites_1000bp)
 
-        
-        pos_openness = extract_dnase_openness_scores(epigenome_id, target_sites_1000bp)
-        neg_openness = extract_dnase_openness_scores(epigenome_id, negative_sites_1000bp)
+        # expand DNase scores to match 1000bp regions
+        log_progress("Expanding DNase scores to 1000bp...")
+        pos_openness = expand_dnase_scores_to_1000bp(pos_openness_200bp)
+        neg_openness = expand_dnase_scores_to_1000bp(neg_openness_200bp)
 
         # merge the two
         sequences, openness, labels = create_natural_imbalanced_dataset(
@@ -952,3 +984,47 @@ def run_batch_processing(combinations=None, logger=None):
     return successful, failed, skipped
 
 
+def check_current_chromosomes():
+    """Check what chromosomes are currently being processed"""
+    print("\n" + "="*50)
+    print("CURRENT CHROMOSOME STATUS CHECK")
+    print("="*50)
+    
+    # Check chromosome sizes
+    chrom_sizes = config.get_chrom_sizes()
+    print(f"Chromosomes in chromosome sizes: {sorted(chrom_sizes.keys())}")
+    print(f"Number of chromosomes: {len(chrom_sizes)}")
+    
+    # Check for sex chromosomes
+    sex_chroms = [c for c in chrom_sizes.keys() if c in ['chrX', 'chrY']]
+    if sex_chroms:
+        print(f"❌ Sex chromosomes found: {sex_chroms}")
+    else:
+        print("✅ No sex chromosomes in chromosome sizes")
+    
+    # Test peak loading for one epigenome
+    try:
+        print("\nTesting peak loading...")
+        peaks = load_all_peaks_at_once("E003")
+        
+        all_chroms_in_peaks = set()
+        for marker in peaks:
+            all_chroms_in_peaks.update(peaks[marker].keys())
+        
+        print(f"Chromosomes found in E003 peaks: {sorted(all_chroms_in_peaks)}")
+        
+        sex_in_peaks = [c for c in all_chroms_in_peaks if c in ['chrX', 'chrY']]
+        if sex_in_peaks:
+            print(f"❌ Sex chromosomes in peaks: {sex_in_peaks}")
+        else:
+            print("✅ No sex chromosomes in peak data")
+            
+    except Exception as e:
+        print(f"Could not test peaks: {e}")
+    
+    print("="*50)
+
+
+
+if __name__ == "__main__":
+    check_current_chromosomes()

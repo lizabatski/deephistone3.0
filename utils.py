@@ -11,6 +11,8 @@ def loadRegions(regions_indices, dna_dict, dns_dict, label_dict):
 
     if dns_dict is not None:
         dns_regions = np.concatenate([dns_dict[meta] for meta in regions_indices], axis=0)
+        #added this in because I just want to check this out
+        dns_regions = np.log2(1 + dns_regions)
     else:
         dns_regions = []
 

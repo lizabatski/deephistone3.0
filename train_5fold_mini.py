@@ -9,22 +9,23 @@ import time
 import random
 from tqdm import tqdm
 
-# Set seeds for reproducibility
+# set seeds for reproducibility
 np.random.seed(42)
 torch.manual_seed(42)
 random.seed(42)
 if torch.cuda.is_available():
     torch.cuda.manual_seed(42)
 
-# Settings
+# settings
 batchsize = 20
 data_file = 'data/final/mini_merged.npz'
 
-# Extract epigenome name from data file
+# extract epigenome from data file name
 epigenome_name = os.path.basename(data_file).split('_')[0]
 results_dir = f'results/{epigenome_name}_5fold_cv'
 os.makedirs(results_dir, exist_ok=True)
 
+#verifying the file exists
 print(f"Current working directory: {os.getcwd()}")
 print(f"Looking for data file: {data_file}")
 print(f"File exists: {os.path.exists(data_file)}")
@@ -36,7 +37,7 @@ print(f'Epigenome: {epigenome_name}')
 print('Begin loading data...')
 start_time = time.time()
 
-# Load data more efficiently - keep as arrays, avoid huge dictionaries
+# load data more efficiently - keep as arrays, avoid huge dictionaries
 with np.load(data_file) as f:
     print("File opened successfully!")
     print(f"Keys in file: {list(f.keys())}")
@@ -44,7 +45,7 @@ with np.load(data_file) as f:
     indexs = f['keys']
     print(f"Loading {len(indexs)} samples...")
     
-    # Load data as arrays
+    # load data as arrays
     keys = f['keys'][:]
     dna_data = f['dna'][:]
     dnase_data = f['dnase'][:]
@@ -64,7 +65,7 @@ print(f"Total samples: {len(keys)}")
 total_memory_gb = (dna_data.nbytes + dnase_data.nbytes + label_data.nbytes) / 1e9
 print(f"Estimated memory usage: {total_memory_gb:.2f} GB")
 
-# Check GPU availability
+# check if gpu is available
 use_gpu = torch.cuda.is_available()
 print(f"CUDA available: {use_gpu}")
 if use_gpu:
@@ -73,22 +74,23 @@ if use_gpu:
 
 device = torch.device("cuda" if use_gpu else "cpu")
 
-# Create index array for cross-validation
+# index array
 indices = np.arange(len(keys))
 
-# Initialize 5-fold cross-validation
+# initialize 5-fold cross-validation
 kfold = KFold(n_splits=5, shuffle=True, random_state=42)
 
-# Storage for results across all folds
+# storage for results across all folds
 all_fold_results = {
-    'test_auPRC': [],
-    'test_auROC': [],
-    'test_labels': [],
-    'test_predictions': []
+    'test_auPRC': [], #area under precision-recall curve for each fold
+    'test_auROC': [], #area under ROC Curve for each fold
+    'test_labels': [], # true labels for each fold
+    'test_predictions': [] #model predictions for each fold
 }
 
+#converts array to dictionaries for each fold 
 def create_subset_dicts(subset_indices, keys, dna_data, dnase_data, label_data):
-    """Create dictionaries for a subset of data (much smaller than full dataset)"""
+    
     print("Creating subset dictionaries...")
     subset_keys = keys[subset_indices]
     
@@ -111,7 +113,7 @@ for fold_idx, (train_val_idx, test_idx) in fold_progress:
     fold_start_time = time.time()
     fold_progress.set_description(f"Fold {fold_idx + 1}/5")
     
-    # Get indices for this fold
+    # get indices for this fold
     train_val_indices = indices[train_val_idx]
     test_indices = indices[test_idx]
     
@@ -146,8 +148,8 @@ for fold_idx, (train_val_idx, test_idx) in fold_progress:
     model = DeepHistone(use_gpu)
     tqdm.write("Model initialized successfully!")
     
-    best_model = copy.deepcopy(model)
-    best_valid_auPRC = 0
+    best_model = copy.deepcopy(model) #keep track of best performing model
+    best_valid_auPRC = 0 
     best_valid_loss = float('inf')
     early_stop_time = 0
     
@@ -155,25 +157,39 @@ for fold_idx, (train_val_idx, test_idx) in fold_progress:
     
     # Training loop with progress bar
     epoch_progress = tqdm(range(50), desc=f"Training Fold {fold_idx + 1}", position=1, leave=False)
+
+    #history dictionary to store trainling loss and validation loss and aurocs
+    history = {
+    'train_loss': [],
+    'val_loss': [],
+    'val_auPRC': [],
+    'val_auROC': []
+    }
     
     for epoch in epoch_progress:
         epoch_start_time = time.time()
         
-        # Shuffle training data each epoch
+        # shuffle training during each epoch
         np.random.shuffle(train_keys)
         
-        # Train using original utils functions
+        # train
         train_loss = model_train(train_keys, model, batchsize, fold_dna_dict, fold_dnase_dict, fold_label_dict, device)
         
-        # Validate using original utils functions
+        # validate
         valid_loss, valid_lab, valid_pred = model_eval(valid_keys, model, batchsize, fold_dna_dict, fold_dnase_dict, fold_label_dict, device)
         valid_auPRC, valid_auROC = metrics(valid_lab, valid_pred, f'{epigenome_name}_Fold{fold_idx+1}_Valid_Epoch{epoch+1}', valid_loss)
+
         
-        # Save best model based on validation auPRC
+        # save best model
         mean_valid_auPRC = np.mean(list(valid_auPRC.values()))
         mean_valid_auROC = np.mean(list(valid_auROC.values()))
+
+        history['train_loss'].append(train_loss)
+        history['val_loss'].append(valid_loss)
+        history['val_auPRC'].append(mean_valid_auPRC)
+        history['val_auROC'].append(mean_valid_auROC)
         
-        # Update progress bar with current metrics
+        # updating progress bar
         epoch_progress.set_postfix({
             'train_loss': f'{train_loss:.4f}',
             'val_loss': f'{valid_loss:.4f}',
@@ -187,36 +203,36 @@ for fold_idx, (train_val_idx, test_idx) in fold_progress:
             best_model = copy.deepcopy(model)
             tqdm.write(f"Epoch {epoch + 1}: New best model! auPRC: {best_valid_auPRC:.4f}")
         
-        # Early stopping based on validation loss
+        # early stopping
         if valid_loss < best_valid_loss:
             early_stop_time = 0
             best_valid_loss = valid_loss
         else:
             model.updateLR(0.1)
             early_stop_time += 1
-            if early_stop_time >= 5:
+            if early_stop_time >= 10:
                 tqdm.write(f"Early stopping at epoch {epoch + 1}")
                 break
     
     epoch_progress.close()
     
-    # Test on the held-out fold
+    # test on out-held fold
     tqdm.write(f"\nTesting fold {fold_idx + 1}...")
     
-    # Add progress bar for testing
+    # progress bar for testing
     with tqdm(desc=f"Testing Fold {fold_idx + 1}", position=1, leave=False) as test_pbar:
         test_lab, test_pred = model_predict(test_keys, best_model, batchsize, fold_dna_dict, fold_dnase_dict, fold_label_dict)
         test_pbar.update(1)
     
     test_auPRC, test_auROC = metrics(test_lab, test_pred, f'{epigenome_name}_Fold{fold_idx+1}_Test')
     
-    # Store results for this fold
+    # store results for this fold
     all_fold_results['test_auPRC'].append(test_auPRC)
     all_fold_results['test_auROC'].append(test_auROC)
     all_fold_results['test_labels'].append(test_lab)
     all_fold_results['test_predictions'].append(test_pred)
     
-    # Save fold-specific results
+    # fold-specific results
     fold_dir = os.path.join(results_dir, f'fold_{fold_idx + 1}')
     os.makedirs(fold_dir, exist_ok=True)
     
@@ -228,6 +244,8 @@ for fold_idx, (train_val_idx, test_idx) in fold_progress:
         save_pbar.update(1)
         best_model.save_model(os.path.join(fold_dir, f'{epigenome_name}_model.txt'))
         save_pbar.update(1)
+    
+    np.save(os.path.join(fold_dir, f'{epigenome_name}_fold{fold_idx+1}_history.npy'), history)
     
     fold_time = time.time() - fold_start_time
     tqdm.write(f"\nFold {fold_idx + 1} completed in {fold_time:.2f} seconds ({fold_time/60:.1f} minutes)!")

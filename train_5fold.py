@@ -157,6 +157,14 @@ for fold_idx, (train_val_idx, test_idx) in fold_progress:
     
     # Training loop with progress bar
     epoch_progress = tqdm(range(50), desc=f"Training Fold {fold_idx + 1}", position=1, leave=False)
+
+    #history dictionary to store trainling loss and validation loss and aurocs
+    history = {
+    'train_loss': [],
+    'val_loss': [],
+    'val_auPRC': [],
+    'val_auROC': []
+    }
     
     for epoch in epoch_progress:
         epoch_start_time = time.time()
@@ -170,10 +178,16 @@ for fold_idx, (train_val_idx, test_idx) in fold_progress:
         # validate
         valid_loss, valid_lab, valid_pred = model_eval(valid_keys, model, batchsize, fold_dna_dict, fold_dnase_dict, fold_label_dict, device)
         valid_auPRC, valid_auROC = metrics(valid_lab, valid_pred, f'{epigenome_name}_Fold{fold_idx+1}_Valid_Epoch{epoch+1}', valid_loss)
+
         
         # save best model
         mean_valid_auPRC = np.mean(list(valid_auPRC.values()))
         mean_valid_auROC = np.mean(list(valid_auROC.values()))
+
+        history['train_loss'].append(train_loss)
+        history['val_loss'].append(valid_loss)
+        history['val_auPRC'].append(mean_valid_auPRC)
+        history['val_auROC'].append(mean_valid_auROC)
         
         # updating progress bar
         epoch_progress.set_postfix({
@@ -196,7 +210,7 @@ for fold_idx, (train_val_idx, test_idx) in fold_progress:
         else:
             model.updateLR(0.1)
             early_stop_time += 1
-            if early_stop_time >= 5:
+            if early_stop_time >= 10:
                 tqdm.write(f"Early stopping at epoch {epoch + 1}")
                 break
     
@@ -230,6 +244,8 @@ for fold_idx, (train_val_idx, test_idx) in fold_progress:
         save_pbar.update(1)
         best_model.save_model(os.path.join(fold_dir, f'{epigenome_name}_model.txt'))
         save_pbar.update(1)
+    
+    np.save(os.path.join(fold_dir, f'{epigenome_name}_fold{fold_idx+1}_history.npy'), history)
     
     fold_time = time.time() - fold_start_time
     tqdm.write(f"\nFold {fold_idx + 1} completed in {fold_time:.2f} seconds ({fold_time/60:.1f} minutes)!")

@@ -828,21 +828,20 @@ def run_single_combination(epigenome_id, target_marker, logger=None):
         if len(negative_sites_1000bp) == 0:
             raise ValueError("No valid negative regions after expansion to 1000bp")
 
-        # extract DNA sequences from 1000bp regions
+        #extract the sequences and DNase openness scores for the expanded regions
         pos_sequences = extract_sequences(target_sites_1000bp)
         neg_sequences = extract_sequences(negative_sites_1000bp)
 
-        # expand DNase scores to match 1000bp regions
-        log_progress("Expanding DNase scores to 1000bp...")
-        pos_openness = expand_dnase_scores_to_1000bp(pos_openness_200bp)
-        neg_openness = expand_dnase_scores_to_1000bp(neg_openness_200bp)
+
+        pos_openness = extract_dnase_openness_scores(epigenome_id, target_sites_1000bp)
+        neg_openness = extract_dnase_openness_scores(epigenome_id, negative_sites_1000bp)
 
         # merge the two
         sequences, openness, labels = create_natural_imbalanced_dataset(
             pos_sequences, pos_openness, neg_sequences, neg_openness
         )
 
-    
+
         all_regions_1000bp = target_sites_1000bp + negative_sites_1000bp
         genomic_keys = [f"{chrom}:{start}-{end}" for chrom, start, end in all_regions_1000bp]
 

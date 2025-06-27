@@ -15,7 +15,8 @@ print(f"All imports done in {time.time() - start:.2f} seconds")
 print("GOT HERE")
 
 # --- Configuration ---
-results_dir = 'results/E005_5fold_cv'
+epigenome = 'E005'
+results_dir = f'results/{epigenome}_5fold_cv'
 num_folds = 5
 epigenome = 'E005'
 marker_names = ['H3K4me3', 'H3K4me1', 'H3K36me3', 'H3K27me3', 'H3K9me3', 'H3K27ac', 'H3K9ac']

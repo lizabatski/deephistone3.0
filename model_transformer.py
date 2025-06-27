@@ -152,6 +152,21 @@ class NetDeepHistoneTransformer(nn.Module):
         super().__init__()
         self.config = config
 
+        if config is None:
+            config = {
+                'use_transformer_seq': True,
+                'use_transformer_dnase': True,
+                'embedding_type': 'linear',    
+                'd_model': 128,
+                'nhead': 8,
+                'dropout': 0.1,
+                'num_layers': 4,
+                'dim_feedforward': 512,
+                'pooling': 'mean',
+                'seq_len': 1000,
+                'vocab_size': 5               
+            }
+
         # --- DNA Sequence Encoder ---
         if config.get('use_transformer_seq', False):
             self.seq_map = ModuleTransformer(input_type='seq', config=config)

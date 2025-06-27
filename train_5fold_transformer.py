@@ -38,7 +38,7 @@ if torch.cuda.is_available():
 
 # Config
 batchsize = 20
-data_file = 'data/final/mini_merged.npz'
+data_file = 'data/final/E005_all_markers_merged.npz'
 epigenome = os.path.basename(data_file).split('_')[0]
 results_dir = f'results/{epigenome}_5fold_transformer'
 os.makedirs(results_dir, exist_ok=True)
@@ -98,6 +98,10 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 kf = KFold(n_splits=5, shuffle=True, random_state=42)
 all_auPRC, all_auROC = [], []
 
+print("[DEBUG] model_transformer loaded from:", NetDeepHistoneTransformer.__module__)
+
+all_train_loss, all_val_loss = [], []
+
 for fold_idx, (train_val_idx, test_idx) in enumerate(kf.split(keys)):
     print(f"\n{'='*30}\n Fold {fold_idx+1}/5 \n{'='*30}")
 
@@ -122,13 +126,18 @@ for fold_idx, (train_val_idx, test_idx) in enumerate(kf.split(keys)):
     early_stop_counter = 0
     max_patience = 5
 
+    fold_train_losses = []
+    fold_val_losses = []
+
     for epoch in range(50):
         np.random.shuffle(train_keys)
         train_loss = model_train(train_keys, model, batchsize, dna_dict, dnase_dict, label_dict, device)
-
         val_loss, val_lab, val_pred = model_eval(val_keys, model, batchsize, dna_dict, dnase_dict, label_dict, device)
         val_auPRC, _ = metrics(val_lab, val_pred, Type=f"valid_fold{fold_idx+1}_epoch{epoch+1}", loss=val_loss)
         mean_val_auprc = np.mean(list(val_auPRC.values()))
+
+        fold_train_losses.append(train_loss)
+        fold_val_losses.append(val_loss)
 
         print(f"Epoch {epoch+1} | Train loss: {train_loss:.4f} | Val auPRC: {mean_val_auprc:.4f}")
 
@@ -141,6 +150,9 @@ for fold_idx, (train_val_idx, test_idx) in enumerate(kf.split(keys)):
             if early_stop_counter >= max_patience:
                 print("Early stopping triggered.")
                 break
+
+    all_train_loss.append(fold_train_losses)
+    all_val_loss.append(fold_val_losses)
 
     # Load best model
     print("Loading best model for test evaluation...")
@@ -164,3 +176,7 @@ avg_auPRC = np.mean([np.mean(list(fold.values())) for fold in all_auPRC])
 avg_auROC = np.mean([np.mean(list(fold.values())) for fold in all_auROC])
 print(f"\nOverall Avg auPRC: {avg_auPRC:.4f}")
 print(f"Overall Avg auROC: {avg_auROC:.4f}")
+
+np.save(os.path.join(results_dir, "train_loss_per_fold.npy"), np.array(all_train_loss, dtype=object))
+np.save(os.path.join(results_dir, "val_loss_per_fold.npy"), np.array(all_val_loss, dtype=object))
+print(f"[INFO] Saved loss histories to: {results_dir}")

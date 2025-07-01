@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=5fold_full
+#SBATCH --job-name=transformer_chr1
 #SBATCH --account=def-majewski
-#SBATCH --time=24:00:00               # 24 hours for full dataset 
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=128G
-#SBATCH --gres=gpu:1                  # Request 1 GPU
-#SBATCH --output=5fold_full_%j.out
-#SBATCH --error=5fold_full_%j.err
+#SBATCH --time=6:00:00                
+#SBATCH --cpus-per-task=4             
+#SBATCH --mem=32G                     
+#SBATCH --gres=gpu:1                 
+#SBATCH --output=transformer_chr1_%j.out
+#SBATCH --error=transformer_chr1_%j.err
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=elizabeth.kourbatski@mail.mcgill.ca
 
@@ -38,7 +38,7 @@ nvidia-smi
 
 echo "----------------------------------------"
 echo "Starting training script..."
-python train_5fold_transformer.py
+python -u train_5fold_transformer.py
 echo "----------------------------------------"
 echo "Finished at: $(date)"
 echo "Job completed successfully!"

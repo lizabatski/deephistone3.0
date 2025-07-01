@@ -1,3 +1,4 @@
+
 from model import DeepHistone
 import copy
 import numpy as np
@@ -8,6 +9,16 @@ from sklearn.model_selection import KFold
 import time
 import random
 from tqdm import tqdm
+from utils import HistoneDataset
+from torch.utils.data import DataLoader
+import argparse
+from datetime import datetime
+
+# --- Argument parser ---
+parser = argparse.ArgumentParser()
+parser.add_argument('--output_dir', type=str, default=None, help="Path to save results")
+args = parser.parse_args()
+
 
 # set seeds for reproducibility
 np.random.seed(42)
@@ -18,11 +29,18 @@ if torch.cuda.is_available():
 
 # settings
 batchsize = 20
-data_file = 'data/final/mini_merged.npz'
+data_file = 'data/final/E005_chr1.npz'
 
 # extract epigenome from data file name
 epigenome_name = os.path.basename(data_file).split('_')[0]
-results_dir = f'results/{epigenome_name}_5fold_cv'
+
+if args.output_dir:
+    results_dir = args.output_dir
+else:
+    # Auto-generate a unique timestamped results directory
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    results_dir = f'results/{epigenome_name}_5fold_cv_{timestamp}'
+
 os.makedirs(results_dir, exist_ok=True)
 
 #verifying the file exists
@@ -88,23 +106,36 @@ all_fold_results = {
     'test_predictions': [] #model predictions for each fold
 }
 
+def get_balanced_multi_label_indices(label_array, positive_ratio=1.0, seed=42):
+    np.random.seed(seed)
+    pos_idx = np.where(np.any(label_array == 1, axis=1))[0]
+    neg_idx = np.where(np.all(label_array == 0, axis=1))[0]
+    max_neg = int(len(pos_idx) * positive_ratio)
+    neg_sample = np.random.choice(neg_idx, size=min(max_neg, len(neg_idx)), replace=False)
+    combined = np.concatenate([pos_idx, neg_sample])
+    np.random.shuffle(combined)
+    return combined
+
 def get_multi_label_balanced_keys(keys, label_dict, positive_ratio=1.0):
-    """
-    Returns a balanced subset of keys:
-    - All samples with at least one positive histone mark
-    - A sampled subset of all-zero samples
-    """
+    
     pos_keys = [k for k in keys if np.any(label_dict[k] == 1)]
     neg_keys = [k for k in keys if np.all(label_dict[k] == 0)]
 
     sample_size = int(len(pos_keys) * positive_ratio)
-    selected_neg = random.sample(neg_keys, min(sample_size, len(neg_keys)))
+    selected_neg = random.sample(neg_keys, min(sample_size, len(neg_keys))) #taking a random sample of negative keys so that the number of positive and negative keys are balanced
 
     combined = pos_keys + selected_neg
     random.shuffle(combined)
     return combined
 
 #converts array to dictionaries for each fold 
+#@param subset_indices: indices of the subset to create dictionaries for
+#@param keys: array of keys corresponding to the data
+#@param dna_data: array of DNA data
+#@param dnase_data: array of DNase data
+#@param label_data: array of labels
+#@return: subset_keys, dna_dict, dnase_dict, label_dict
+# This function creates dictionaries for the subset of data based on the provided indices
 def create_subset_dicts(subset_indices, keys, dna_data, dnase_data, label_data):
     
     print("Creating subset dictionaries...")
@@ -125,7 +156,7 @@ def create_subset_dicts(subset_indices, keys, dna_data, dnase_data, label_data):
 # Perform 5-fold cross-validation with progress bar
 fold_progress = tqdm(enumerate(kfold.split(indices)), total=5, desc="Cross-Validation Folds", position=0)
 
-for fold_idx, (train_val_idx, test_idx) in fold_progress:
+for fold_idx, (train_val_idx, test_idx) in fold_progress: #uses KFold to split the indices into train_val and test sets
     fold_start_time = time.time()
     fold_progress.set_description(f"Fold {fold_idx + 1}/5")
     
@@ -134,10 +165,10 @@ for fold_idx, (train_val_idx, test_idx) in fold_progress:
     test_indices = indices[test_idx]
     
     # Further split train_val into train and validation (80% train, 20% validation)
-    np.random.shuffle(train_val_indices)
+    #np.random.shuffle(train_val_indices)
     split_point = int(len(train_val_indices) * 0.8)
-    train_indices = train_val_indices[:split_point]
-    valid_indices = train_val_indices[split_point:]
+    train_indices = train_val_indices[:split_point] #arrays of indexes for training data
+    valid_indices = train_val_indices[split_point:] #array of indexes for validation data
     
     tqdm.write(f"\n{'='*50}")
     tqdm.write(f"FOLD {fold_idx + 1}/5")
@@ -146,13 +177,13 @@ for fold_idx, (train_val_idx, test_idx) in fold_progress:
     tqdm.write(f"Validation samples: {len(valid_indices)}")
     tqdm.write(f"Test samples: {len(test_indices)}")
     
-    # Create dictionaries for this fold only (much smaller than full dataset)
+    # create dictionaries for this fold only (much smaller than full dataset)
     fold_indices = np.concatenate([train_indices, valid_indices, test_indices])
     fold_keys, fold_dna_dict, fold_dnase_dict, fold_label_dict = create_subset_dicts(
         fold_indices, keys, dna_data, dnase_data, label_data
-    )
+    ) #call to function to create dictionaries for the current fold
     
-    # Convert indices to keys for this fold
+    # Convert indices to keys for this fold to be used to construct the histonedataset objects
     train_keys = keys[train_indices]
     valid_keys = keys[valid_indices]
     test_keys = keys[test_indices]
@@ -186,15 +217,25 @@ for fold_idx, (train_val_idx, test_idx) in fold_progress:
         epoch_start_time = time.time()
         
         # shuffle training during each epoch
-        np.random.shuffle(train_keys)
+        #np.random.shuffle(train_keys)
         
         # train
-        balanced_keys = get_multi_label_balanced_keys(train_keys, fold_label_dict, positive_ratio=1.0)
-        train_loss = model_train(balanced_keys, model, batchsize, fold_dna_dict, fold_dnase_dict, fold_label_dict, device)
+        balanced_idx = get_balanced_multi_label_indices(label_data[train_indices], positive_ratio=1.0)
+        balanced_keys = keys[train_indices][balanced_idx] #keeps all positive samples and randomly samples negative samples to balance the dataset
+        #dataloader will handle the batching and shuffling of the data
+        train_loader = DataLoader(
+            HistoneDataset(balanced_keys, fold_dna_dict, fold_dnase_dict, fold_label_dict),
+            batch_size=batchsize, shuffle=True
+        ) #the histone dataset class is used to create a dataset object that can be used by the dataloader (how to get one sample from a specific index and how many total samples there are)
+        train_loss = model_train(train_loader, model) #fed into my model training
         
         # validate
-        valid_loss, valid_lab, valid_pred = model_eval(valid_keys, model, batchsize, fold_dna_dict, fold_dnase_dict, fold_label_dict, device)
-        valid_auPRC, valid_auROC = metrics(valid_lab, valid_pred, f'{epigenome_name}_Fold{fold_idx+1}_Valid_Epoch{epoch+1}', valid_loss)
+        valid_loader = DataLoader(
+            HistoneDataset(valid_keys, fold_dna_dict, fold_dnase_dict, fold_label_dict),
+            batch_size=batchsize, shuffle=False
+        )
+        valid_loss, valid_lab, valid_pred = model_eval(valid_loader, model) 
+        valid_auPRC, valid_auROC = metrics(valid_lab, valid_pred, f'{epigenome_name}_Fold{fold_idx+1}_Valid_Epoch{epoch+1}', valid_loss) #evaluates per-marker metrics on the validation set
 
         
         # save best model
@@ -237,11 +278,16 @@ for fold_idx, (train_val_idx, test_idx) in fold_progress:
     tqdm.write(f"\nTesting fold {fold_idx + 1}...")
     
     # progress bar for testing
+    #wraps testset in DataLoader and runs predictions using the best model from training
     with tqdm(desc=f"Testing Fold {fold_idx + 1}", position=1, leave=False) as test_pbar:
-        test_lab, test_pred = model_predict(test_keys, best_model, batchsize, fold_dna_dict, fold_dnase_dict, fold_label_dict)
+        test_loader = DataLoader(
+            HistoneDataset(test_keys, fold_dna_dict, fold_dnase_dict, fold_label_dict),
+            batch_size=batchsize, shuffle=False
+        )
+        test_lab, test_pred = model_predict(test_loader, best_model)
         test_pbar.update(1)
     
-    test_auPRC, test_auROC = metrics(test_lab, test_pred, f'{epigenome_name}_Fold{fold_idx+1}_Test')
+    test_auPRC, test_auROC = metrics(test_lab, test_pred, f'{epigenome_name}_Fold{fold_idx+1}_Test') #evaluates final metrics for this fold
     
     # store results for this fold
     all_fold_results['test_auPRC'].append(test_auPRC)

@@ -49,8 +49,8 @@ class DeepHistoneConfig:
         self.VALIDATE_GENOME_COVERAGE = True
         
         # Test mode settings
-        self.TEST_MODE = False  
-        self.TEST_CHROMOSOME = "chr22"
+        self.TEST_MODE = True  
+        self.TEST_CHROMOSOME = "chr1"
         
         # Batch processing options
         self.SKIP_EXISTING = True  # Skip already processed datasets

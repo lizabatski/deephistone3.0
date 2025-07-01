@@ -57,8 +57,10 @@ def find_converted_datasets():
     
     # Try multiple patterns to find the files
     patterns = [
-        os.path.join(config.INPUT_DIR, "*_expected_format.npz"),  # Files directly in the directory
-        os.path.join(config.INPUT_DIR, "*", "*_expected_format.npz"),  # Files in subdirectories
+        #os.path.join(config.INPUT_DIR, "*_expected_format.npz"),  # Files directly in the directory
+        #os.path.join(config.INPUT_DIR, "*", "*_expected_format.npz"),  # Files in subdirectories
+        os.path.join(config.INPUT_DIR, "*_chr1_expected_format.npz"),
+        os.path.join(config.INPUT_DIR, "*", "*_chr1_expected_format.npz")
     ]
     
     files = []

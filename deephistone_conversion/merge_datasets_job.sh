@@ -27,10 +27,10 @@ mkdir -p logs data/converted
 
 # check input files
 echo "Input files for $EPIGENOME:"
-ls -lh data/converted/${EPIGENOME}/${EPIGENOME}_*_expected_format.npz
+ls -lh data/converted/${EPIGENOME}/${EPIGENOME}_*_chr1_expected_format.npz
 
 # count files
-file_count=$(ls data/converted/${EPIGENOME}/${EPIGENOME}_*_expected_format.npz 2>/dev/null | wc -l)
+file_count=$(ls data/converted/${EPIGENOME}/${EPIGENOME}_*_chr1_expected_format.npz 2>/dev/null | wc -l)
 echo "Found $file_count $EPIGENOME converted datasets"
 
 if [ $file_count -ne 7 ]; then
@@ -42,7 +42,8 @@ fi
 echo "Starting $EPIGENOME merge process..."
 python3 deephistone_conversion/merge_datasets.py \
     --input-dir data/converted/${EPIGENOME} \
-    --output data/converted/${EPIGENOME}_all_markers_merged.npz
+    --output data/converted/${EPIGENOME}_chr1_all_markers_merged.npz
+
 
 # check result
 if [ $? -eq 0 ]; then

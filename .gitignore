@@ -99,3 +99,9 @@ unusedscripts/
 config.ini
 secrets.yaml
 .env
+
+*.nbconvert.ipynb
+runs/
+*.orig
+lightning_logs/
+checkpoints/

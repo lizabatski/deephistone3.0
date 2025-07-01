@@ -63,7 +63,8 @@ def find_input_file(epigenome_id, marker):
     # Look for files matching the pattern
     possible_patterns = [
         f"{epigenome_id}_{marker}_deephistone{config.TEST_MODE_SUFFIX}.npz",
-        f"{epigenome_id}_{marker}_deephistone.npz"
+        f"{epigenome_id}_{marker}_deephistone.npz", 
+        f"{epigenome_id}_{marker}_deephistone_chr1.npz"    
     ]
     
     for pattern in possible_patterns:
@@ -328,7 +329,7 @@ class SingleConverterConfig:
         self.ALL_MARKERS = ['H3K4me3', 'H3K4me1', 'H3K36me3', 'H3K27me3', 'H3K9me3', 'H3K27ac', 'H3K9ac']
         
         # Test mode suffix (if you used test mode)
-        self.TEST_MODE_SUFFIX = "_chr22"  # Set to "" if you didn't use test mode
+        self.TEST_MODE_SUFFIX = "_chr1"  # Set to "" if you didn't use test mode
 
 
 config = SingleConverterConfig()
@@ -362,7 +363,8 @@ def find_input_file(epigenome_id, marker):
     # Look for files matching the pattern
     possible_patterns = [
         f"{epigenome_id}_{marker}_deephistone{config.TEST_MODE_SUFFIX}.npz",
-        f"{epigenome_id}_{marker}_deephistone.npz"
+        f"{epigenome_id}_{marker}_deephistone.npz",
+        f"{epigenome_id}_{marker}_deephistone_chr1.npz", 
     ]
     
     for pattern in possible_patterns:

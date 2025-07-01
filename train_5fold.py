@@ -1,13 +1,57 @@
-from model import DeepHistone
-import copy
-import numpy as np
-from utils import metrics, model_train, model_eval, model_predict
-import torch
-import os
-from sklearn.model_selection import KFold
 import time
+start = time.time()
+
+print("[IMPORT] Starting imports...", flush=True)
+
+import argparse
+from datetime import datetime
+
+t0 = time.time()
+from model import DeepHistone
+print(f"[IMPORT] DeepHistone loaded in {time.time() - t0:.2f} seconds", flush=True)
+
+t1 = time.time()
+import copy
+print(f"[IMPORT] copy loaded in {time.time() - t1:.2f} seconds", flush=True)
+
+t2 = time.time()
+import numpy as np
+print(f"[IMPORT] numpy loaded in {time.time() - t2:.2f} seconds", flush=True)
+
+t3 = time.time()
+from utils import metrics, model_train, model_eval, model_predict, HistoneDataset
+print(f"[IMPORT] utils (metrics, model_*) loaded in {time.time() - t3:.2f} seconds", flush=True)
+
+t4 = time.time()
+import torch
+print(f"[IMPORT] torch loaded in {time.time() - t4:.2f} seconds", flush=True)
+
+t5 = time.time()
+import os
+print(f"[IMPORT] os loaded in {time.time() - t5:.2f} seconds", flush=True)
+
+t6 = time.time()
+from sklearn.model_selection import KFold
+print(f"[IMPORT] sklearn.model_selection.KFold loaded in {time.time() - t6:.2f} seconds", flush=True)
+
+t7 = time.time()
 import random
+print(f"[IMPORT] random loaded in {time.time() - t7:.2f} seconds", flush=True)
+
+t8 = time.time()
 from tqdm import tqdm
+print(f"[IMPORT] tqdm loaded in {time.time() - t8:.2f} seconds", flush=True)
+
+print(f"[IMPORT] All imports completed in {time.time() - start:.2f} seconds", flush=True)
+
+
+# --- Argument parser ---
+parser = argparse.ArgumentParser()
+parser.add_argument('--output_dir', type=str, default=None, help="Path to save results")
+parser.add_argument('--dropout', type=float, default=0.0, help="Dropout rate for the model")
+args = parser.parse_args()
+
+
 
 # set seeds for reproducibility
 np.random.seed(42)
@@ -18,11 +62,18 @@ if torch.cuda.is_available():
 
 # settings
 batchsize = 20
-data_file = 'data/final/E005_all_markers_merged.npz'
+data_file = 'data/final/E005_chr1.npz'
 
 # extract epigenome from data file name
 epigenome_name = os.path.basename(data_file).split('_')[0]
-results_dir = f'results/{epigenome_name}_5fold_cv'
+
+if args.output_dir:
+    results_dir = args.output_dir
+else:
+    # Auto-generate a unique timestamped results directory
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    results_dir = f'results/{epigenome_name}_5fold_cv_{timestamp}'
+
 os.makedirs(results_dir, exist_ok=True)
 
 #verifying the file exists
@@ -118,7 +169,7 @@ for fold_idx, (train_val_idx, test_idx) in fold_progress:
     test_indices = indices[test_idx]
     
     # Further split train_val into train and validation (80% train, 20% validation)
-    np.random.shuffle(train_val_indices)
+    #np.random.shuffle(train_val_indices)
     split_point = int(len(train_val_indices) * 0.8)
     train_indices = train_val_indices[:split_point]
     valid_indices = train_val_indices[split_point:]
@@ -136,16 +187,24 @@ for fold_idx, (train_val_idx, test_idx) in fold_progress:
         fold_indices, keys, dna_data, dnase_data, label_data
     )
     
-    # Convert indices to keys for this fold
-    train_keys = keys[train_indices]
-    valid_keys = keys[valid_indices]
-    test_keys = keys[test_indices]
+    # Create PyTorch Datasets and DataLoaders
+    train_dataset = HistoneDataset(keys[train_indices], fold_dna_dict, fold_dnase_dict, fold_label_dict)
+    valid_dataset = HistoneDataset(keys[valid_indices], fold_dna_dict, fold_dnase_dict, fold_label_dict)
+    test_dataset  = HistoneDataset(keys[test_indices],  fold_dna_dict, fold_dnase_dict, fold_label_dict)
+
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batchsize, shuffle=True)
+    print(f"Train loader has {len(train_loader)} batches")
+    valid_loader = torch.utils.data.DataLoader(valid_dataset, batch_size=batchsize, shuffle=False)
+    test_loader  = torch.utils.data.DataLoader(test_dataset,  batch_size=batchsize, shuffle=False)
+
     
     tqdm.write(f"Fold dictionaries created with {len(fold_keys)} samples")
     
-    # Initialize model for this fold
+    # initialize model for this fold
     tqdm.write("Initializing model...")
-    model = DeepHistone(use_gpu)
+    model = DeepHistone(use_gpu=True, learning_rate=0.001, dropout_rate=args.dropout)
+    optimizer = model.optimizer
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
     tqdm.write("Model initialized successfully!")
     
     best_model = copy.deepcopy(model) #keep track of best performing model
@@ -168,51 +227,58 @@ for fold_idx, (train_val_idx, test_idx) in fold_progress:
     
     for epoch in epoch_progress:
         epoch_start_time = time.time()
-        
-        # shuffle training during each epoch
-        np.random.shuffle(train_keys)
-        
-        # train
-        train_loss = model_train(train_keys, model, batchsize, fold_dna_dict, fold_dnase_dict, fold_label_dict, device)
-        
-        # validate
-        valid_loss, valid_lab, valid_pred = model_eval(valid_keys, model, batchsize, fold_dna_dict, fold_dnase_dict, fold_label_dict, device)
-        valid_auPRC, valid_auROC = metrics(valid_lab, valid_pred, f'{epigenome_name}_Fold{fold_idx+1}_Valid_Epoch{epoch+1}', valid_loss)
+        print(f"\n[Epoch {epoch+1}] Starting...")
 
-        
-        # save best model
-        mean_valid_auPRC = np.mean(list(valid_auPRC.values()))
-        mean_valid_auROC = np.mean(list(valid_auROC.values()))
+        try:
+            train_loss = model_train(train_loader, model)
+            valid_loss, valid_lab, valid_pred = model_eval(valid_loader, model)
 
-        history['train_loss'].append(train_loss)
-        history['val_loss'].append(valid_loss)
-        history['val_auPRC'].append(mean_valid_auPRC)
-        history['val_auROC'].append(mean_valid_auROC)
-        
-        # updating progress bar
-        epoch_progress.set_postfix({
-            'train_loss': f'{train_loss:.4f}',
-            'val_loss': f'{valid_loss:.4f}',
-            'val_auPRC': f'{mean_valid_auPRC:.4f}',
-            'val_auROC': f'{mean_valid_auROC:.4f}',
-            'early_stop': f'{early_stop_time}/5'
-        })
-        
-        if mean_valid_auPRC > best_valid_auPRC:
-            best_valid_auPRC = mean_valid_auPRC
-            best_model = copy.deepcopy(model)
-            tqdm.write(f"Epoch {epoch + 1}: New best model! auPRC: {best_valid_auPRC:.4f}")
-        
-        # early stopping
-        if valid_loss < best_valid_loss:
-            early_stop_time = 0
-            best_valid_loss = valid_loss
-        else:
-            model.updateLR(0.1)
-            early_stop_time += 1
-            if early_stop_time >= 10:
-                tqdm.write(f"Early stopping at epoch {epoch + 1}")
-                break
+            valid_auPRC, valid_auROC = metrics(valid_lab, valid_pred,
+                                            f'{epigenome_name}_Fold{fold_idx+1}_Valid_Epoch{epoch+1}', valid_loss)
+
+            if valid_loss is not None and not np.isnan(valid_loss):
+                print(f"[Scheduler] Stepping with valid_loss = {valid_loss:.4f}")
+                scheduler.step(valid_loss)
+            else:
+                print("[WARNING] Skipping scheduler.step() due to invalid valid_loss")
+
+            mean_valid_auPRC = np.mean(list(valid_auPRC.values()))
+            mean_valid_auROC = np.mean(list(valid_auROC.values()))
+
+            history['train_loss'].append(train_loss)
+            history['val_loss'].append(valid_loss)
+            history['val_auPRC'].append(mean_valid_auPRC)
+            history['val_auROC'].append(mean_valid_auROC)
+
+            epoch_progress.set_postfix({
+                'train_loss': f'{train_loss:.4f}' if train_loss is not None else 'None',
+                'val_loss': f'{valid_loss:.4f}' if valid_loss is not None else 'None',
+                'val_auPRC': f'{mean_valid_auPRC:.4f}',
+                'val_auROC': f'{mean_valid_auROC:.4f}',
+                'early_stop': f'{early_stop_time}/10'
+            })
+
+            if mean_valid_auPRC > best_valid_auPRC:
+                best_valid_auPRC = mean_valid_auPRC
+                best_model = copy.deepcopy(model)
+                tqdm.write(f"[Epoch {epoch + 1}] New best model! auPRC: {best_valid_auPRC:.4f}")
+
+            scheduler.step(valid_loss)
+            tqdm.write(f"[Epoch {epoch + 1}] LR = {optimizer.param_groups[0]['lr']:.6f}")
+
+            if valid_loss < best_valid_loss:
+                early_stop_time = 0
+                best_valid_loss = valid_loss
+            else:
+                early_stop_time += 1
+                if early_stop_time >= 10:
+                    tqdm.write(f"[Epoch {epoch + 1}] Early stopping triggered.")
+                    break
+
+        except Exception as e:
+            print(f"[ERROR] Exception during epoch {epoch+1}: {e}")
+            break
+
     
     epoch_progress.close()
     
@@ -221,7 +287,7 @@ for fold_idx, (train_val_idx, test_idx) in fold_progress:
     
     # progress bar for testing
     with tqdm(desc=f"Testing Fold {fold_idx + 1}", position=1, leave=False) as test_pbar:
-        test_lab, test_pred = model_predict(test_keys, best_model, batchsize, fold_dna_dict, fold_dnase_dict, fold_label_dict)
+        test_lab, test_pred = model_predict(test_loader, best_model)
         test_pbar.update(1)
     
     test_auPRC, test_auROC = metrics(test_lab, test_pred, f'{epigenome_name}_Fold{fold_idx+1}_Test')

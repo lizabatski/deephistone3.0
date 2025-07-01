@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --job-name=5fold_chr1
 #SBATCH --account=def-majewski
-#SBATCH --time=1:00:00               # 24 hours for full dataset 
-#SBATCH --cpus-per-task=4
-#SBATCH --mem=32G
-#SBATCH --gres=gpu:1                  # Request 1 GPU
-#SBATCH --output=5fold_full_%j.out
-#SBATCH --error=5fold_full_%j.err
+#SBATCH --time=4:00:00               # Should be plenty for chr1
+#SBATCH --cpus-per-task=4            # 2–4 is enough unless you parallelized
+#SBATCH --mem=32G                    # Way more than you need, but safe
+#SBATCH --gres=gpu:1                 # Keep 1 GPU for acceleration
+#SBATCH --output=5fold_chr1_%j.out
+#SBATCH --error=5fold_chr1_%j.err
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=elizabeth.kourbatski@mail.mcgill.ca
 
@@ -38,7 +38,7 @@ nvidia-smi
 
 echo "----------------------------------------"
 echo "Starting training script..."
-python train_5fold.py --output_dir results/5fold_full_cv_chr1
+python train_5fold_balance.py --output_dir results/5fold_full_cv_balanced
 echo "----------------------------------------"
 echo "Finished at: $(date)"
 echo "Job completed successfully!"

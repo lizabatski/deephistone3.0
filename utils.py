@@ -1,72 +1,108 @@
 from sklearn.metrics import auc, roc_auc_score, precision_recall_curve
 import numpy as np
+from torch.utils.data import Dataset
+import torch
+
+class HistoneDataset(Dataset):
+    def __init__(self, keys, dna_dict, dnase_dict, label_dict): #initializes the dataset 
+        self.keys = keys
+        self.dna_dict = dna_dict
+        self.dnase_dict = dnase_dict
+        self.label_dict = label_dict
+
+    def __len__(self):
+        return len(self.keys)
+
+    def __getitem__(self, idx):
+        key = self.keys[idx]
+        dna = self.dna_dict[key][0]      # Remove shape (1, 4, 1000) -> (4, 1000)
+        dnase = self.dnase_dict[key][0]  # Remove shape (1, 1, 1000) -> (1, 1000)
+        label = self.label_dict[key][0]  
+        
+        #converts arrays so that they are suitable for model input
+        return (
+            torch.tensor(dna, dtype=torch.float32), 
+            torch.tensor(dnase, dtype=torch.float32),
+            torch.tensor(label, dtype=torch.float32),
+        )
 
 histones = ['H3K4me1', 'H3K4me3', 'H3K27me3', 'H3K36me3', 'H3K9me3', 'H3K9ac', 'H3K27ac']
 
+#was from their github repo
 def loadRegions(regions_indices, dna_dict, dns_dict, label_dict):
     if dna_dict is not None:
-        dna_regions = np.concatenate([dna_dict[meta] for meta in regions_indices], axis=0)
+        dna_regions = np.concatenate([dna_dict[meta] for meta in regions_indices], axis=0) #if DNA data exists, stack all DNA arrays (1, 4, 1000) -> (N, 4, 1000)
     else:
         dna_regions = []
 
     if dns_dict is not None:
-        dns_regions = np.concatenate([dns_dict[meta] for meta in regions_indices], axis=0)
+        dns_regions = np.concatenate([dns_dict[meta] for meta in regions_indices], axis=0) #(1, 1, 1000) -> (N, 1, 1000)
         #added this in because I just want to check this out
-        dns_regions = np.log2(1 + dns_regions)
+        #dns_regions = np.log2(1 + dns_regions)
     else:
         dns_regions = []
 
-    label_regions = np.concatenate([label_dict[meta] for meta in regions_indices], axis=0).astype(int)
+    label_regions = np.concatenate([label_dict[meta] for meta in regions_indices], axis=0).astype(int) #(1, 7) -> (N, 7)
     return dna_regions, dns_regions, label_regions
 
 
-def model_train(regions, model, batchsize, dna_dict, dns_dict, label_dict, device=None):
+def model_train(dataloader, model):
+    model.forward_fn.train()
     train_loss = []
-    for i in range(0, len(regions), batchsize):
-        batch = regions[i:i+batchsize]
-        if len(batch) < 2:
-            print(f"[INFO] Skipping training batch with size {len(batch)} at index {i}")
+    print("[INFO] Starting model_train...")
+
+    for i, (seq_batch, dns_batch, lab_batch) in enumerate(dataloader):
+        # NaN check
+        if torch.isnan(lab_batch).any():
+            print(f"[WARNING] NaNs in lab_batch at batch {i}")
             continue
-        seq_batch, dns_batch, lab_batch = loadRegions(batch, dna_dict, dns_dict, label_dict)
-        loss = model.train_on_batch(seq_batch, dns_batch, lab_batch)
-        train_loss.append(loss)
+
+        try:
+            loss = model.train_on_batch(seq_batch, dns_batch, lab_batch)
+            if loss is None or np.isnan(loss):
+                print(f"[WARNING] Loss is None or NaN at batch {i}")
+                continue
+            train_loss.append(loss)
+            if i == 0 or (i + 1) % 100 == 0:
+                print(f"[INFO] Batch {i+1}: loss = {loss:.4f}")
+        except Exception as e:
+            print(f"[ERROR] Exception in train_on_batch at batch {i}: {e}")
+            raise
+
     if len(train_loss) == 0:
+        print("[WARNING] No valid batches in training — returning 0.0")
         return 0.0
+
     return np.mean(train_loss)
 
-
-def model_eval(regions, model, batchsize, dna_dict, dns_dict, label_dict, device=None):
+#evaluates the model on the validation set so it still computes the loss
+def model_eval(dataloader, model):
+    model.forward_fn.eval() 
     losses = []
-    preds = []
-    labels = []
-    for i in range(0, len(regions), batchsize):
-        batch = regions[i:i+batchsize]
-        if len(batch) < 2:
-            print(f"[INFO] Skipping validation batch with size {len(batch)} at index {i}")
-            continue
-        seq_batch, dns_batch, lab_batch = loadRegions(batch, dna_dict, dns_dict, label_dict)
+    preds, labels = [], []
+    for seq_batch, dns_batch, lab_batch in dataloader:
         loss, pred = model.eval_on_batch(seq_batch, dns_batch, lab_batch)
         losses.append(loss)
-        labels.extend(lab_batch)
-        preds.extend(pred)
-    if len(losses) == 0:
-        return 0.0, np.zeros((0, 7)), np.zeros((0, 7))
-    return np.mean(losses), np.array(labels), np.array(preds)
+        labels.append(lab_batch.numpy())
+        preds.append(pred)
+    return (
+        np.mean(losses),
+        np.concatenate(labels),
+        np.concatenate(preds),
+    )
 
-
-def model_predict(regions, model, batchsize, dna_dict, dns_dict, label_dict, device=None):
-    labels = []
-    preds = []
-    for i in range(0, len(regions), batchsize):
-        batch = regions[i:i+batchsize]
-        if len(batch) < 2:
-            print(f"[INFO] Skipping test batch with size {len(batch)} at index {i}")
-            continue
-        seq_batch, dns_batch, lab_batch = loadRegions(batch, dna_dict, dns_dict, label_dict)
+#evaluates the model on the test set
+def model_predict(dataloader, model):
+    model.forward_fn.eval()
+    preds, labels = [], []
+    for seq_batch, dns_batch, lab_batch in dataloader:
         pred = model.test_on_batch(seq_batch, dns_batch)
-        labels.extend(lab_batch)
-        preds.extend(pred)
-    return np.array(labels), np.array(preds)
+        preds.append(pred)
+        labels.append(lab_batch.numpy())
+    return (
+        np.concatenate(labels),
+        np.concatenate(preds),
+    )
 
 
 def ROC(label, pred):

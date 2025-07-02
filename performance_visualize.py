@@ -14,6 +14,9 @@ from sklearn.metrics import precision_recall_curve, average_precision_score
 print("sklearn metrics imported")
 import argparse
 print("argparse imported")
+from sklearn.metrics import confusion_matrix
+import seaborn as sns
+
 print(f"All imports done in {time.time() - start:.2f} seconds")
 
 print("GOT HERE")
@@ -132,15 +135,14 @@ for fold in range(1, num_folds + 1):
         continue
 
     history = np.load(history_path, allow_pickle=True).item()
+    print(f"  Fold {fold}: available history keys = {list(history.keys())}")
     epochs = list(range(1, len(history['train_loss']) + 1))
 
     fig, axs = plt.subplots(2, 2, figsize=(12, 8))
     fig.suptitle(f'Training Dynamics - Fold {fold}', fontsize=16)
 
-    initial_train_loss = history['train_loss'][0]
-    train_loss_pct = [(loss / initial_train_loss) * 100 for loss in history['train_loss']]
-    axs[0, 0].plot(epochs, train_loss_pct, label='Train Loss (% of initial)', color='blue')
-    axs[0, 0].set_ylabel('Loss (% of initial)')
+    axs[0, 0].plot(epochs, history['train_loss'], label='Train Loss', color='blue')
+    axs[0, 0].set_ylabel('Loss')
     axs[0, 0].set_title('Training Loss')
     axs[0, 0].set_xlabel('Epoch')
     axs[0, 0].set_ylabel('Loss')
@@ -152,23 +154,58 @@ for fold in range(1, num_folds + 1):
     axs[0, 1].set_ylabel('Loss')
     axs[0, 1].grid(True)
 
-    axs[1, 0].plot(epochs, history['val_auPRC'], label='Val auPRC', color='green')
-    axs[1, 0].set_title('Validation auPRC')
-    axs[1, 0].set_xlabel('Epoch')
-    axs[1, 0].set_ylabel('auPRC')
-    axs[1, 0].grid(True)
+    if 'val_auPRC' in history:
+        axs[1, 0].plot(epochs, history['val_auPRC'], label='Val auPRC', color='green')
+        axs[1, 0].set_title('Validation auPRC')
+        axs[1, 0].set_xlabel('Epoch')
+        axs[1, 0].set_ylabel('auPRC')
+        axs[1, 0].grid(True)
+    else:
+        axs[1, 0].set_visible(False)
+        print(f"  Fold {fold}: 'val_auPRC' not found in history. Skipping auPRC plot.")
 
-    axs[1, 1].plot(epochs, history['val_auROC'], label='Val auROC', color='purple')
-    axs[1, 1].set_title('Validation auROC')
-    axs[1, 1].set_xlabel('Epoch')
-    axs[1, 1].set_ylabel('auROC')
-    axs[1, 1].grid(True)
+    # --- Validation auROC ---
+    if 'val_auROC' in history:
+        axs[1, 1].plot(epochs, history['val_auROC'], label='Val auROC', color='purple')
+        axs[1, 1].set_title('Validation auROC')
+        axs[1, 1].set_xlabel('Epoch')
+        axs[1, 1].set_ylabel('auROC')
+        axs[1, 1].grid(True)
+    else:
+        axs[1, 1].set_visible(False)
+        print(f"  Fold {fold}: 'val_auROC' not found in history. Skipping auROC plot.")
 
     plt.tight_layout(rect=[0, 0, 1, 0.95])
     curve_path = os.path.join(results_dir, f'{epigenome}_Fold{fold}_Training_Curves.png')
     plt.savefig(curve_path)
     print(f"  Fold {fold}: training curve saved to {curve_path}")
     plt.show()
+
+
+print("Generating confusion matrices...")
+
+conf_matrix_dir = os.path.join(results_dir, "confusion_matrices")
+os.makedirs(conf_matrix_dir, exist_ok=True)
+
+binary_preds = (preds >= 0.5).astype(int)
+
+for i, marker in enumerate(marker_names):
+    y_true = labels[:, i]
+    y_pred = binary_preds[:, i]
+    cm = confusion_matrix(y_true, y_pred)
+
+    plt.figure(figsize=(4, 4))
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", cbar=False,
+                xticklabels=['Pred 0', 'Pred 1'], yticklabels=['True 0', 'True 1'])
+    plt.title(f'Confusion Matrix - {marker}')
+    plt.xlabel('Predicted')
+    plt.ylabel('Actual')
+    plt.tight_layout()
+
+    cm_path = os.path.join(conf_matrix_dir, f'{marker}_confusion_matrix.png')
+    plt.savefig(cm_path)
+    print(f"  Saved confusion matrix for {marker} to {cm_path}")
+    plt.close()
 
 
 print("All visualizations completed successfully.")

@@ -65,6 +65,21 @@ class ModuleDense(nn.Module):
         )
         self.out_size = 1000 // 4 // 4 * 512
 
+    def forward(self, seq):
+            n, h, w = seq.size()
+            if self.SeqOrDnase == 'seq':
+                seq = seq.view(n, 1, 4, w)
+            elif self.SeqOrDnase == 'dnase':
+                seq = seq.view(n, 1, 1, w)
+
+            out = self.conv1(seq)
+            out = self.block1(out)
+            out = self.trans1(out)
+            out = self.block2(out)
+            out = self.trans2(out)
+            out = out.view(out.size(0), -1)
+            return out
+
 
 
 class NetDeepHistone(nn.Module):
